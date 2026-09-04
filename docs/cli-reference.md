@@ -42,7 +42,7 @@ ksec <group> <sub> --help
 | `asset` | Auto-registered assets | `list [--engagement]` |
 | `finding` | Findings + risk | `create --title --severity [--risk ...]`, `list`, `explain <id>` |
 | `evidence` | Evidence (SHA-256) | `add [--content|--file]`, `list`, `verify <id>` |
-| `case` | Cases | `create --title --severity`, `list`, `add-finding --case --finding` |
+| `case` | Cases | `create --title --severity`, `list`, `add-finding --case --finding`, `close <id>` |
 | `report` | Reporting | `create --engagement --title [--format markdown\|html] [--out]`, `list`, `show <id>` |
 | `learn` | Learning curriculum | `list`, `lesson --id`, `complete --id --user`, `progress --user` |
 | `dfir` | Digital forensics / IR | `artifact add|list`, `event add`, `timeline [--case]` |

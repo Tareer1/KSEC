@@ -701,6 +701,9 @@ def build_parser() -> argparse.ArgumentParser:
     c_add.add_argument("--case", type=int, required=True)
     c_add.add_argument("--finding", type=int, required=True)
     c_add.set_defaults(func=data_commands.cmd_case_add_finding)
+    c_close = c_sub.add_parser("close", help="Close a case", parents=[common])
+    c_close.add_argument("id", type=int)
+    c_close.set_defaults(func=data_commands.cmd_case_close)
 
     return parser
 

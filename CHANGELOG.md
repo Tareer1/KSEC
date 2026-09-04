@@ -43,7 +43,8 @@ All notable changes are tracked here. Format follows
   in ATT&CK tactic order; reports gain per-phase technique coverage
 - New tool integrations: sslscan (`tls_scan`), nikto (`web_vuln_scan`),
   gobuster (`directory_brute`) adapters + parsers + install mapping
-- 286 unit tests + 164-step CLI smoke suite
+- Case lifecycle closure exposed on the CLI (`ksec case close <id>`)
+- 286 unit tests + 165-step CLI smoke suite
 
 ## [0.1.0] - 2026-09-04
 

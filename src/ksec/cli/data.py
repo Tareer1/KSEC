@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from ksec.bootstrap import KsecContext
 from ksec.cli.output import emit
+from ksec.core.errors import KSECError
 from ksec.risk.engine import calculate_risk
 
 
@@ -283,4 +284,14 @@ def cmd_case_add_finding(ctx: KsecContext, args) -> int:
         args.json,
         args.quiet,
     )
+    return 0
+
+
+def cmd_case_close(ctx: KsecContext, args) -> int:
+    try:
+        case = ctx.cases.close(args.id)
+    except (KSECError, ValueError) as exc:
+        emit(str(exc), args.json, args.quiet)
+        return 1
+    emit({"closed": True, "id": case.id, "status": case.status}, args.json, args.quiet)
     return 0

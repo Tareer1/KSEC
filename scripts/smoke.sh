@@ -179,6 +179,7 @@ expect_fail "evidence verify unknown" "${BIN[@]}" evidence verify 99999
 run_ok "case create"   "${BIN[@]}" case create --title "Smoke case" --severity high --engagement 1
 run_ok "case list"     "${BIN[@]}" case list
 run_ok "case add-finding" "${BIN[@]}" case add-finding --case 1 --finding 1
+expect_fail "case close unknown" "${BIN[@]}" case close 4242
 
 say "10. reporting"
 run_ok "report create" "${BIN[@]}" report create --engagement 1 --title "Smoke report"

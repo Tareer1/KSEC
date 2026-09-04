@@ -30,8 +30,14 @@ All notable changes are tracked here. Format follows
 - **DFIR forensics extras**: `dfir artifact hash` records SHA-256/SHA-1 +
   size of a collected file on the artifact (audited); `dfir export` writes
   the merged artifact+event chronology as CSV or JSONL.
-- Knowledge base grew to 45 topics (siem, windowed-rules, api, schedules,
-  dashboard, whatweb, theHarvester + refreshed dfir/plugins/learner cards).
+- Knowledge base grew to 47 topics (siem, windowed-rules, api, schedules,
+  dashboard, whatweb, theHarvester, nuclei, whois + refreshed
+  dfir/plugins/learner cards).
+- CI upgraded to a full QA gate: unit matrix on Python 3.11/3.12/3.13 +
+  compile/AST sweep + `TODO`/`FIXME`/`XXX` marker check + CLI boot check
+  (test job) and the full 201-check CLI smoke suite with minimal Kali
+  tools (smoke job). QA/release numbers synced (387 unit / 201 smoke /
+  migrations 001-011).
 - Arsenal +2: **whatweb** (web_fingerprint — server/framework/title/IP
   fingerprints as host + web_tech entities) and **theHarvester**
   (osint_harvest — passive emails/hosts/IPs from public sources; default

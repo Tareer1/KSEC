@@ -742,6 +742,39 @@ TOPICS: tuple[Topic, ...] = (
         ),
     ),
     Topic(
+        id="tool-nuclei",
+        title="nuclei — fast template-based vulnerability scanner",
+        kind="tool",
+        audience=("all", "red"),
+        summary=(
+            "nuclei checks targets against hundreds of small detection templates — known "
+            "CVEs, misconfigurations, exposed files — and reports matches with severity. "
+            "In KSEC it is an alternative provider for the web_vuln_scan capability."
+        ),
+        keywords=("nuclei", "template", "cve scan", "web vuln", "nuclei kya hai", "vulnerability scanner"),
+        sections=(
+            ("cmd", "ksec run web_vuln_scan example.com --engagement 1 --user admin"),
+            ("p", "nuclei or nikto can back the same web_vuln_scan capability; matches carry the template name + severity so you can promote them to risk-scored findings."),
+            ("tip", "Keep templates updated on your Kali box (nuclei -update) — detection quality depends on them."),
+        ),
+    ),
+    Topic(
+        id="tool-whois",
+        title="whois — domain ownership lookup",
+        kind="tool",
+        audience=("all", "purple"),
+        summary=(
+            "whois reveals who registered a domain, when, and via which registrar — pure "
+            "public-record research. In KSEC it is the whois_lookup capability under the "
+            "recon workspace."
+        ),
+        keywords=("whois", "registrar", "domain owner", "registration", "whois kya hai"),
+        sections=(
+            ("cmd", "ksec run whois_lookup example.com --user purple --workspace RESEARCH_OSINT"),
+            ("p", "Researcher use: registration dates, registrar and nameservers help tie infrastructure to an actor or campaign during OSINT."),
+        ),
+    ),
+    Topic(
         id="tool-whatweb",
         title="whatweb — web technology fingerprinting",
         kind="tool",

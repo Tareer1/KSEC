@@ -9,14 +9,20 @@ Mirrors `specs/09-testing-qa-release.md` (testing/QA) and §55 of
 
 | Gate | Command | Where | Scope |
 |---|---|---|---|
-| Unit suite | `make test` (`python3 -m unittest discover -s tests`) | local + CI | 256 tests across every module |
-| CLI smoke | `make smoke` (`bash scripts/smoke.sh`) | local (needs network + kali tools) | 150 end-to-end CLI checks incl. real dig/nmap/curl against example.com |
+| Unit suite | `make test` (`python3 -m unittest discover -s tests`) | local + CI | 387 tests across every module |
+| CLI smoke | `make smoke` (`bash scripts/smoke.sh`) | local + CI (needs network + a few kali tools) | 201 end-to-end CLI checks incl. real dig/nmap/curl against example.com |
 | Boot check | `ksec init && ksec status && ksec doctor` | CI | CLI boots and schema applies on a fresh env |
 | Health | `ksec doctor` | local | db/migrations/tools/plugins/backup |
 | Update readiness | `ksec update check` | local | version/migrations/plugins/rollback |
 
-CI (`.github/workflows/ci.yml`) runs the unit suite on Python 3.11/3.12/3.13
-and the boot check on push to `main` and on pull requests.
+CI (`.github/workflows/ci.yml`) runs on push to `main` and on pull
+requests:
+
+* **test** job — unit suite on Python 3.11/3.12/3.13, compile/AST sanity
+  sweep, no `TODO`/`FIXME`/`XXX` markers in `src/`, and a CLI boot check
+  (`init && status && doctor && ask`) on a fresh env.
+* **smoke** job — the full 201-check CLI smoke suite on Python 3.12 after
+  installing the minimal scan tools (`dnsutils`, `nmap`) for live checks.
 
 ## 2. Pre-release checklist
 
@@ -39,7 +45,7 @@ Semantic versioning (`major.minor.patch`). Changelog follows
   migration numbers.
 - **New compatible features** → bump minor (pre-1.0) or patch.
 
-Schema is versioned independently by migrations (`001`–`008`); the
+Schema is versioned independently by migrations (`001`–`011`); the
 database reports its own `schema vN`, and `doctor`/`update check` verify it
 matches the code.
 
@@ -72,6 +78,9 @@ contract; an unhandled traceback is always a bug.
 - **Unit** (`tests/`): services with a temp database via the same bootstrap
   used by the CLI; scheduler/execution exercised with the `null` adapter
   and mocked tools where network is unavailable.
+- **Arsenal**: adapter command building + parser unit tests for every
+  integrated Kali tool (incl. whatweb/theHarvester), with live
+  verification against RFC-2606 targets where tools exist on the box.
 - **CLI**: `tests/test_*_cli.py` run real handler functions; `scripts/smoke.sh`
   runs the real `python3 -m ksec` process end to end.
 - **Security**: RBAC permission checks, policy denial paths, plugin trust

@@ -1,10 +1,13 @@
-.PHONY: test smoke run init install clean
+.PHONY: test smoke qa run init install clean
 
 test:
 	PYTHONPATH=src python3 -m unittest discover -s tests -v
 
 smoke:
 	bash scripts/smoke.sh
+
+qa:
+	python3 scripts/qa_checks.py
 
 run:
 	PYTHONPATH=src python3 -m ksec

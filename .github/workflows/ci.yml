@@ -16,10 +16,12 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
-      - name: Run test suite
+      - name: Run unit suite
         run: |
           PYTHONPATH=src python3 -m unittest discover -s tests -v
-      - name: Verify CLI boots
+      - name: Static QA gates (compile sweep, markers, knowledge shape)
+        run: python3 scripts/qa_checks.py
+      - name: Verify CLI boots on a fresh env
         run: |
           KSEC_HOME=/tmp/ksec-ci KSEC_CONFIG=/tmp/ksec-ci/config.toml \
             PYTHONPATH=src python3 -m ksec init --username admin --password 'ci-pass'
@@ -27,3 +29,21 @@ jobs:
             PYTHONPATH=src python3 -m ksec status
           KSEC_HOME=/tmp/ksec-ci KSEC_CONFIG=/tmp/ksec-ci/config.toml \
             PYTHONPATH=src python3 -m ksec doctor
+          KSEC_HOME=/tmp/ksec-ci KSEC_CONFIG=/tmp/ksec-ci/config.toml \
+            PYTHONPATH=src python3 -m ksec ask "what is ksec" >/dev/null
+
+  smoke:
+    # Full end-to-end CLI smoke suite. Needs a handful of Kali tools for the
+    # live network checks; everything else is local and stdlib-only.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install minimal scan tools (dig/nmap for live checks)
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq dnsutils nmap
+      - name: Run CLI smoke suite
+        run: bash scripts/smoke.sh

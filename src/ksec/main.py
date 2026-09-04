@@ -17,6 +17,7 @@ from ksec.cli import assess as assess_commands
 from ksec.cli import atomic as atomic_commands
 from ksec.cli import backup as backup_commands
 from ksec.cli import core as core_commands
+from ksec.cli import ask as ask_commands
 from ksec.cli import data as data_commands
 from ksec.cli import dfir as dfir_commands
 from ksec.cli import engagement as engagement_commands
@@ -704,6 +705,24 @@ def build_parser() -> argparse.ArgumentParser:
     c_close = c_sub.add_parser("close", help="Close a case", parents=[common])
     c_close.add_argument("id", type=int)
     c_close.set_defaults(func=data_commands.cmd_case_close)
+
+    # in-tool mentor: ask anything, basics included, never leave the tool
+    p_ask = sub.add_parser(
+        "ask",
+        help="Ask anything in plain language (concepts, tools, role playbooks, modules)",
+        parents=[common],
+    )
+    p_ask.add_argument("question", nargs="*", help="Your question, e.g. 'what is a port' or 'red team kaise shuru karun'")
+    p_ask.add_argument("--list", dest="list_topics", action="store_true", help="List every topic in the knowledge base")
+    p_ask.set_defaults(func=ask_commands.cmd_ask)
+
+    p_role = sub.add_parser(
+        "role",
+        help="Show a role playbook: red | blue | purple | learner",
+        parents=[common],
+    )
+    p_role.add_argument("name", help="red | blue | purple | learner")
+    p_role.set_defaults(func=ask_commands.cmd_role)
 
     return parser
 

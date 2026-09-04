@@ -26,6 +26,7 @@ from ksec.evidence.service import EvidenceService
 from ksec.findings.service import FindingService
 from ksec.installer.service import ToolInstallManager
 from ksec.jobs.models import JobRepository
+from ksec.knowledge.service import KnowledgeService
 from ksec.learning.service import LearningService
 from ksec.logging_setup import setup_logging
 from ksec.notifications.service import EventBus, NotificationService
@@ -83,6 +84,7 @@ class KsecContext:
     dfir: DfirService
     intel: ThreatIntelService
     explain: ExplanationService
+    knowledge: KnowledgeService
     soc: SocPipeline
     soc_events: EventStore
     soc_rules: RuleStore
@@ -142,6 +144,7 @@ def bootstrap(overrides: dict | None = None, run_migrations: bool = True) -> Kse
     # Auto-register IOCs from every completed job's evidence.
     scheduler.intel_service = intel
     explain = ExplanationService(capabilities)
+    knowledge = KnowledgeService()
 
     adversary = AdversaryService(db)
     vuln = VulnService(db, policy, findings, audit)
@@ -191,6 +194,7 @@ def bootstrap(overrides: dict | None = None, run_migrations: bool = True) -> Kse
         dfir=dfir,
         intel=intel,
         explain=explain,
+        knowledge=knowledge,
         soc=soc,
         soc_events=soc_events,
         soc_rules=soc_rules,

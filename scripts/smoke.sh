@@ -292,8 +292,35 @@ wait "$DPID" 2>/dev/null
 say "20. TUI headless"
 run_clean "tui headless" "${BIN[@]}" tui
 
-say "21. help parsers (every group)"
-for g in init status doctor version config env admin audit tools session engagement assess job asset finding evidence case report learn workflow dfir intel plugin adversary vuln atomic update notify soc run backup tui dashboard; do
+say "21. in-tool mentor (ask / role)"
+run_ok "ask --help" "${BIN[@]}" ask --help
+if "${BIN[@]}" ask "what is a port" | grep -q "door"; then
+  PASS=$((PASS + 1)); echo "PASS  ask concept routing"
+else
+  FAIL=$((FAIL + 1)); FAILED+=("ask concept"); echo "FAIL  ask concept routing"
+fi
+if "${BIN[@]}" ask "nmap kya hai" | grep -q "nmap"; then
+  PASS=$((PASS + 1)); echo "PASS  ask roman-urdu routing"
+else
+  FAIL=$((FAIL + 1)); FAILED+=("ask urdu"); echo "FAIL  ask roman-urdu routing"
+fi
+if "${BIN[@]}" role blue | grep -q "BLUE TEAM playbook"; then
+  PASS=$((PASS + 1)); echo "PASS  role blue playbook"
+else
+  FAIL=$((FAIL + 1)); FAILED+=("role blue"); echo "FAIL  role blue playbook"
+fi
+if "${BIN[@]}" role red | grep -q "RED TEAM playbook"; then
+  PASS=$((PASS + 1)); echo "PASS  role red playbook"
+else
+  FAIL=$((FAIL + 1)); FAILED+=("role red"); echo "FAIL  role red playbook"
+fi
+run_ok "role purple" "${BIN[@]}" role purple
+run_ok "ask --list" "${BIN[@]}" ask --list
+expect_fail "ask unmatched" "${BIN[@]}" ask "zzqqxxyy nonsense"
+expect_fail "role unknown" "${BIN[@]}" role hacker
+
+say "22. help parsers (every group)"
+for g in init status doctor version config env admin audit tools session engagement assess job asset finding evidence case report learn workflow dfir intel plugin adversary vuln atomic update notify soc run backup tui dashboard ask role; do
   run_ok "help: $g" "${BIN[@]}" "$g" --help
 done
 

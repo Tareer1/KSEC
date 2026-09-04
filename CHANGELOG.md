@@ -3,6 +3,26 @@
 All notable changes are tracked here. Format follows
 [Keep a Changelog](https://keepachangelog.com/) and semantic versioning.
 
+## Unreleased — real-use power round
+
+### Added
+
+- Real offensive arsenal: five production Kali integrations wired through
+  the authorized pipeline (capability → scope policy → adapter → parser →
+  assets/IOCs): wpscan (WordPress/CVE findings), hydra (authorized online
+  auth testing → confirmed-login findings), enum4linux (SMB shares /
+  null-session), smbmap (share access map), dnsrecon (deep DNS
+  enumeration; scheduler now parses a configurable output stream because
+  dnsrecon ≥ 1.6 logs to stderr)
+- **In-tool mentor**: `ksec ask "<question>"` answers anything in plain
+  language — security concepts from absolute zero (IP, ports, DNS, TLS,
+  IOCs, risk, engagement/scope), every integrated tool card, four role
+  playbooks (`ksec role red|blue|purple|learner`) and module guides — and
+  always suggests the exact command to run next. Fully offline,
+  deterministic keyword routing (Roman-Urdu questions like "nmap kya hai"
+  route correctly), mode-aware, `--json`, `--list`
+- 323 unit tests + 176-step CLI smoke suite
+
 ## [0.2.0] - 2026-09-04
 
 ### Added — Expanded modules (spec Stages 6–8)

@@ -75,11 +75,12 @@ Implemented so far (spec Stages 1–9 core, interfaces included):
 - [x] Authorized vuln checks: deterministic TLS/header/banner probes → auto findings (`ksec vuln check`)
 - [x] Atomic red tests for detection validation (`ksec atomic list|info|run`)
 - [x] Adversary kill-chain execution (ATT&CK tactic order) + per-phase coverage reports (`ksec adversary exercise chain`)
-- [x] Kali tool integrations: nmap, dig, curl + **sslscan, gobuster, nikto** (adapters+parsers+install mapping)
+- [x] Kali tool integrations: nmap, dig, curl + **sslscan, gobuster, nikto, wpscan, hydra, enum4linux, smbmap, dnsrecon** (adapters+parsers+install mapping)
+- [x] **In-tool mentor** — `ksec ask` answers anything in plain language inside the tool (security concepts from zero, every tool card, module guides) and `ksec role red|blue|purple|learner` shows the exact step-by-step playbook for each team; fully offline, no AI dependency
 - [x] CLI: `init status doctor version config env tools session engagement
-      assess job asset finding evidence case report learn backup tui dashboard
-      admin user audit plugin intel dfir soc workflow adversary vuln atomic update notify run`
-- [x] 294 unit tests (stdlib unittest, no dependencies) + 165-step CLI smoke suite
+      assess job asset finding evidence case report learn workflow dfir intel
+      plugin adversary vuln atomic soc run backup tui dashboard ask role`
+- [x] 323 unit tests (stdlib unittest, no dependencies) + 176-step CLI smoke suite
   (`python3 -m unittest discover -s tests` / `bash scripts/smoke.sh`)
 - [x] v0.2.0 — changelog in `CHANGELOG.md`; docs in [`docs/`](docs/README.md)
 

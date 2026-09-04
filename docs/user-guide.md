@@ -38,7 +38,8 @@ This guide covers **every implemented command**. Run
 24. [Updates](#24-updates)
 25. [Vulnerability checks](#25-vulnerability-checks)
 26. [Atomic red tests](#26-atomic-red-tests)
-27. [Tips and troubleshooting](#27-tips-and-troubleshooting)
+27. [In-tool mentor](#27-in-tool-mentor)
+28. [Tips and troubleshooting](#28-tips-and-troubleshooting)
 
 ---
 
@@ -900,7 +901,40 @@ runs an exercise ordered by ATT&CK tactic phases
 (reconnaissance → discovery → … → command-and-control) instead of stored
 position, and `ksec adversary report <id>` shows per-phase coverage.
 
-## 27. Tips and troubleshooting
+## 27. In-tool mentor
+
+`ksec ask` is a built-in mentor: **ask anything in plain language and get
+the answer inside the tool** — no internet, no AI dependency. Questions
+can be as basic as you like ("what is an ip address") or as specific as
+"hydra kya hai"; Roman-Urdu phrasing routes correctly. Every answer ends
+with the exact command to run next.
+
+```bash
+python3 -m ksec ask "what is a port"            # concept, from zero
+python3 -m ksec ask "nmap kya hai"              # tool card
+python3 -m ksec ask "red team kaise shuru karun" # role playbook
+python3 -m ksec ask "what is an ioc" --json     # structured answer
+python3 -m ksec ask --list                       # every topic (38)
+```
+
+`ksec role` is a shortcut to the four team playbooks — the exact ordered
+steps for that job, with copy-paste commands:
+
+```bash
+python3 -m ksec role red       # attacker: authorize -> recon -> probe -> vuln -> emulate -> document -> report
+python3 -m ksec role blue      # defender: intel/rules -> ingest -> triage -> investigate -> resolve -> close
+python3 -m ksec role purple    # researcher/OSINT: collect -> structure intel -> share -> validate detections
+python3 -m ksec role learner   # student: curriculum -> lessons -> progress -> ask anything
+```
+
+The knowledge base covers: core concepts (IP, ports, DNS, HTTP/TLS,
+vulnerabilities, IOCs, engagement/scope, risk, workspaces, OSINT,
+ethics), every integrated tool (nmap, dig, dnsrecon, curl, sslscan,
+nikto, gobuster, wpscan, hydra, enum4linux, smbmap, subfinder), module
+guides (vuln, atomic, adversary, SOC pipeline, DFIR, plugins) and the
+four role playbooks.
+
+## 28. Tips and troubleshooting
 
 **"Target not authorized for ..." / REQUIRE_AUTHORIZATION**
 The target is outside every engagement scope rule. Add an allow rule
@@ -913,7 +947,10 @@ The role assigned to the user does not include the permission. Use
 **"No adapter for capability ..."**
 The capability is known but has no adapter implementation. Built-in
 capabilities with adapters: `port_scan` (nmap), `dns_lookup` (dig),
-`http_probe` (curl), `test_scan` (null).
+`http_probe` (curl), `tls_scan` (sslscan), `directory_brute`
+(gobuster), `web_vuln_scan` (nikto), `wpscan`, `auth_test` (hydra),
+`smb_enum` (enum4linux), `smb_map` (smbmap), `dns_enum` (dnsrecon),
+`test_scan` (null).
 
 **"Tool not found"**
 The underlying Kali tool is not installed. Use

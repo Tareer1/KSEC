@@ -57,6 +57,22 @@ ksec <group> <sub> --help
 | `backup` | Backup / restore | `create`, `list`, `verify <id>`, `restore <id> --yes` |
 | `tui` | Terminal UI | `--mode beginner\|professional\|expert` |
 | `dashboard` | Local web dashboard | `start --host --port [--background]` |
+| `ask` | In-tool mentor: answer anything in plain language | `ask "<question>"`, `--list` (all topics) |
+| `role` | Role playbook shortcut | `red \| blue \| purple \| learner` |
+
+## In-tool mentor (`ksec ask` / `ksec role`)
+
+No question is too basic — answers live inside the tool and always end with
+the exact command to run next. Fully offline, no AI dependency.
+
+```bash
+ksec ask "what is an ip address"      # concept, from zero
+ksec ask "nmap kya hai"               # tool card (Roman-Urdu routes fine)
+ksec ask "red team kaise shuru karun" # role playbook
+ksec role red                         # same playbook, shortcut
+ksec ask --list                       # every topic in the knowledge base
+ksec ask "hydra kya hai" --json       # machine-readable answer
+```
 
 ## Common workflows
 

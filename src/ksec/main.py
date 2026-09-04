@@ -17,6 +17,7 @@ from ksec.cli import assess as assess_commands
 from ksec.cli import atomic as atomic_commands
 from ksec.cli import backup as backup_commands
 from ksec.cli import core as core_commands
+from ksec.cli import api as api_commands
 from ksec.cli import ask as ask_commands
 from ksec.cli import data as data_commands
 from ksec.cli import dfir as dfir_commands
@@ -749,6 +750,31 @@ def build_parser() -> argparse.ArgumentParser:
     )
     p_role.add_argument("name", help="red | blue | purple | learner")
     p_role.set_defaults(func=ask_commands.cmd_role)
+
+    # REST API + tokens (scripts / SIEM integration)
+    p_api = sub.add_parser("api", help="REST API: bearer tokens + server", parents=[common])
+    api_sub = p_api.add_subparsers(dest="api_command", metavar="API_COMMAND")
+    a_token = api_sub.add_parser("token", help="API token management", parents=[common])
+    tok_sub = a_token.add_subparsers(dest="token_command", metavar="TOKEN_COMMAND")
+    tok_create = tok_sub.add_parser("create", help="Create an API token (shown once)", parents=[common])
+    tok_create.add_argument("--name", default="", help="Label for the token")
+    tok_create.add_argument("--user", required=True)
+    tok_create.add_argument("--password", default=None)
+    tok_create.set_defaults(func=api_commands.cmd_api_token_create)
+    tok_list = tok_sub.add_parser("list", help="List your tokens", parents=[common])
+    tok_list.add_argument("--user", required=True)
+    tok_list.add_argument("--password", default=None)
+    tok_list.set_defaults(func=api_commands.cmd_api_token_list)
+    tok_revoke = tok_sub.add_parser("revoke", help="Revoke a token", parents=[common])
+    tok_revoke.add_argument("id", type=int)
+    tok_revoke.add_argument("--user", required=True)
+    tok_revoke.add_argument("--password", default=None)
+    tok_revoke.set_defaults(func=api_commands.cmd_api_token_revoke)
+    a_serve = api_sub.add_parser("serve", help="Run the JSON API server", parents=[common])
+    a_serve.add_argument("--host", default="127.0.0.1")
+    a_serve.add_argument("--port", type=int, default=9090)
+    a_serve.add_argument("--background", action="store_true", help="Run in a background thread")
+    a_serve.set_defaults(func=api_commands.cmd_api_serve)
 
     return parser
 

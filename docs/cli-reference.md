@@ -59,6 +59,7 @@ ksec <group> <sub> --help
 | `dashboard` | Local web dashboard | `start --host --port [--background]` |
 | `ask` | In-tool mentor: answer anything in plain language | `ask "<question>"`, `--list` (all topics) |
 | `role` | Role playbook shortcut | `red \| blue \| purple \| learner` |
+| `api` | REST API (bearer tokens + server) | `token create --name --user`, `token list`, `token revoke <id>`, `serve --host --port` |
 
 ## In-tool mentor (`ksec ask` / `ksec role`)
 

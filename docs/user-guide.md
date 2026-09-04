@@ -722,6 +722,40 @@ Read-only API endpoints served over HTTP (stdlib):
 The dashboard uses the same core services as the CLI — it cannot bypass
 authorization or scope. Use `--background` to run it in a thread.
 
+### REST API (`ksec api`) — for scripts / SIEM integration
+
+A token-authenticated JSON API over the same core services (stdlib,
+offline). Bearer tokens belong to a platform user and can be revoked;
+write endpoints go through the same policy checks and audit trail as the
+CLI — never around them.
+
+```bash
+# 1. Create a token (shown ONCE — store it safely)
+python3 -m ksec api token create --name ci --user admin --password '...'
+
+# 2. Start the API server
+python3 -m ksec api serve --host 127.0.0.1 --port 9090
+
+# 3. Use it (Authorization: Bearer <token>)
+curl -H "Authorization: Bearer ksec_..." http://127.0.0.1:9090/api/v1/status
+curl -X POST -H "Authorization: Bearer ksec_..." -H 'Content-Type: application/json' \
+     -d '{"event_id":"e1","event_type":"auth_failure","severity":"high","ip":"203.0.113.66"}' \
+     http://127.0.0.1:9090/api/v1/soc/ingest
+```
+
+Read endpoints: `status`, `jobs`, `assets`, `findings`, `alerts`, `cases`,
+`engagements`, `sessions`, `iocs`, `tools`, `audit` (requires `audit.read`).
+Write endpoints: `POST /api/v1/soc/ingest`, `POST /api/v1/alerts/action`
+(ack|resolve|close, records the token user as actor),
+`POST /api/v1/cases/close`, and `POST /api/v1/run` (capability + target +
+engagement — dry-run and live runs are scope-checked; out-of-scope targets
+return `403`).
+
+```bash
+python3 -m ksec api token list --user admin --password '...'
+python3 -m ksec api token revoke 1 --user admin --password '...'
+```
+
 ---
 
 ## 20. End-to-end example

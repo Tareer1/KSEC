@@ -35,7 +35,19 @@ All notable changes are tracked here. Format follows
 - SOC triage **actor attribution**: `ksec soc alert action
   ack|resolve|close` and `ksec case close` accept optional `--user`
   and record the acting analyst in the audit log
-- 337 unit tests + 184-step CLI smoke suite
+
+### Added — REST API (scripts / SIEM integration)
+
+- `ksec api token create|list|revoke` (migration `010`): SHA-256-hashed,
+  revocable bearer tokens owned by a platform user; plaintext shown once
+- `ksec api serve`: stdlib JSON API on localhost — reads
+  (status/jobs/assets/findings/alerts/cases/engagements/sessions/iocs/
+  tools/audit-gated) and writes (SOC ingest, alert ack/resolve/close,
+  case close, capability runs with dry-run and live scope checks) — all
+  through the same services, policy and audit trail as the CLI
+- Confirmed AI-free: `dependencies = []`, offline mentor is a
+  deterministic keyword router — no LLM/cloud anywhere
+- 346 unit tests + 189-step CLI smoke suite
 
 ## [0.2.0] - 2026-09-04
 

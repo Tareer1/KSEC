@@ -26,13 +26,13 @@ class MigrationTest(KsecTestCase):
         self.assertIn("004_custom_workflows.sql", applied)
         self.assertIn("005_dfir_threatintel.sql", applied)
         self.assertIn("009_schedules.sql", applied)
-        self.assertEqual(self.runner.current_version(), 9)
+        self.assertEqual(self.runner.current_version(), 10)
         self.assertEqual(self.runner.pending(), [])
 
     def test_apply_is_idempotent(self):
         self.runner.apply()
         self.runner.apply()
-        self.assertEqual(self.runner.current_version(), 9)
+        self.assertEqual(self.runner.current_version(), 10)
 
     def test_schema_tables_exist(self):
         self.runner.apply()

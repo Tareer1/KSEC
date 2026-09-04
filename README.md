@@ -80,10 +80,12 @@ Implemented so far (spec Stages 1–9 core, interfaces included):
 - [x] **Recurring jobs** (cron automation): `ksec job schedule add <capability> <target> --cron '0 6 * * *'` — policy-checked at creation, fires through the same scheduler + audit trail (`ksec job schedule list|remove|run`)
 - [x] Report **executive summary**: auto severity counts + top-risk findings + recommended next step at the top of every Markdown/HTML report
 - [x] SOC triage actor audit: `soc alert action ack/resolve/close` and `case close` accept `--user`, recording who acted in the audit log
+- [x] **REST API** (`ksec api`): SHA-256-hashed revocable bearer tokens + stdlib JSON server — reads (status/jobs/assets/findings/alerts/cases/engagements/sessions/iocs/tools/audit) and writes (SOC ingest, alert/case actions, scope-checked capability runs) all behind the same policy + audit as the CLI
+- [x] **100% AI-free**: zero dependencies (`dependencies = []`), fully offline — the `ksec ask` mentor is a deterministic keyword router over curated topics, no LLM/cloud of any kind
 - [x] CLI: `init status doctor version config env tools session engagement
       assess job asset finding evidence case report learn workflow dfir intel
-      plugin adversary vuln atomic soc run backup tui dashboard ask role`
-- [x] 337 unit tests (stdlib unittest, no dependencies) + 184-step CLI smoke suite
+      plugin adversary vuln atomic soc run backup tui dashboard ask role api`
+- [x] 346 unit tests (stdlib unittest, no dependencies) + 190-step CLI smoke suite
   (`python3 -m unittest discover -s tests` / `bash scripts/smoke.sh`)
 - [x] v0.2.0 — changelog in `CHANGELOG.md`; docs in [`docs/`](docs/README.md)
 

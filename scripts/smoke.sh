@@ -344,6 +344,32 @@ else
   FAIL=$((FAIL + 1)); FAILED+=("exec summary"); echo "FAIL  report executive summary"
 fi
 
+say "25. REST API tokens + server"
+APITOKEN=$("${BIN[@]}" api token create --name smoke --user "$ADMIN" --password "$APW" | grep '^ksec_')
+if [ -n "$APITOKEN" ]; then
+  PASS=$((PASS + 1)); echo "PASS  api token create"
+else
+  FAIL=$((FAIL + 1)); FAILED+=("api token"); echo "FAIL  api token create"
+fi
+run_ok "api token list" "${BIN[@]}" api token list --user "$ADMIN" --password "$APW"
+"${BIN[@]}" api serve --host 127.0.0.1 --port 8993 >"$KSEC_HOME/api.log" 2>&1 &
+APID=$!
+sleep 1.5
+if curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8993/api/v1/status 2>/dev/null | grep -q 401; then
+  PASS=$((PASS + 1)); echo "PASS  api 401 without token"
+else
+  FAIL=$((FAIL + 1)); FAILED+=("api 401"); echo "FAIL  api 401 without token"
+fi
+if curl -s -o /dev/null -w '%{http_code}' -H "Authorization: Bearer $APITOKEN" http://127.0.0.1:8993/api/v1/status 2>/dev/null | grep -q 200; then
+  PASS=$((PASS + 1)); echo "PASS  api 200 with token"
+else
+  FAIL=$((FAIL + 1)); FAILED+=("api 200"); echo "FAIL  api 200 with token"
+fi
+kill "$APID" 2>/dev/null
+wait "$APID" 2>/dev/null
+"${BIN[@]}" api token revoke 1 --user "$ADMIN" --password "$APW" >/dev/null 2>&1 && { PASS=$((PASS + 1)); echo "PASS  api token revoke"; } || { FAIL=$((FAIL + 1)); FAILED+=("api revoke"); echo "FAIL  api token revoke"; }
+expect_fail "api token create bad password" "${BIN[@]}" api token create --name x --user "$ADMIN" --password wrong
+
 # ---------------------------------------------------------------------------
 echo
 echo "=========================================="

@@ -10,6 +10,7 @@ from pathlib import Path
 
 from ksec.adapters.registry import AdapterRegistry
 from ksec.adversary.service import AdversaryService
+from ksec.api.tokens import TokenStore
 from ksec.assets.service import AssetService
 from ksec.audit.service import AuditService
 from ksec.authorization.service import AuthorizationService
@@ -85,6 +86,7 @@ class KsecContext:
     intel: ThreatIntelService
     explain: ExplanationService
     knowledge: KnowledgeService
+    api_tokens: TokenStore
     soc: SocPipeline
     soc_events: EventStore
     soc_rules: RuleStore
@@ -145,6 +147,7 @@ def bootstrap(overrides: dict | None = None, run_migrations: bool = True) -> Kse
     scheduler.intel_service = intel
     explain = ExplanationService(capabilities)
     knowledge = KnowledgeService()
+    api_tokens = TokenStore(db)
 
     adversary = AdversaryService(db)
     vuln = VulnService(db, policy, findings, audit)
@@ -195,6 +198,7 @@ def bootstrap(overrides: dict | None = None, run_migrations: bool = True) -> Kse
         intel=intel,
         explain=explain,
         knowledge=knowledge,
+        api_tokens=api_tokens,
         soc=soc,
         soc_events=soc_events,
         soc_rules=soc_rules,

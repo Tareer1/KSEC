@@ -1,6 +1,7 @@
 # KSEC — All-in-One Kali Linux Security Operations Platform
 
 > **Don't reinvent Kali. Orchestrate Kali.**
+> **Made by REBEL.**
 
 KSEC is a modular, local-first, AI-free security operations platform for
 Kali Linux. It provides one unified interface through which authorized

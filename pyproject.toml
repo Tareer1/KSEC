@@ -9,7 +9,7 @@ description = "KSEC — All-in-One Kali Linux Security Operations, Assessment, R
 readme = "README.md"
 requires-python = ">=3.11"
 license = { text = "MIT" }
-authors = [{ name = "KSEC Contributors" }]
+authors = [{ name = "REBEL" }]
 keywords = ["security", "kali", "red-team", "blue-team", "osint", "dfir", "pentest"]
 classifiers = [
     "Environment :: Console",

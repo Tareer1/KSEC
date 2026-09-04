@@ -23,6 +23,16 @@ class TargetMatchTest(KsecTestCase):
         self.assertTrue(target_matches("192.168.1.1", "192.168.1.0/24"))
         self.assertFalse(target_matches("192.168.2.1", "192.168.1.0/24"))
 
+    def test_url_and_port_forms(self):
+        self.assertTrue(target_matches("https://example.com/path", "example.com"))
+        self.assertTrue(target_matches("http://sub.example.com:8080/x", "example.com"))
+        self.assertTrue(target_matches("example.com:443", "example.com"))
+        self.assertTrue(target_matches("10.0.0.5:8080", "10.0.0.0/8"))
+        self.assertFalse(target_matches("https://example.org/", "example.com"))
+
+    def test_ipv6_left_intact(self):
+        self.assertTrue(target_matches("2001:db8::1", "2001:db8::/32"))
+
 
 class AuthorizationServiceTest(KsecTestCase):
     def setUp(self):

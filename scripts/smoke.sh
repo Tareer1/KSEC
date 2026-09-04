@@ -190,7 +190,7 @@ say "11. learning"
 run_ok "learn list"    "${BIN[@]}" learn list
 LESSON_ID=$("${BIN[@]}" learn list --json 2>/dev/null | python3 -c "import sys,json
 d=json.load(sys.stdin)
-print(d['phases'][0]['lessons'][0]['id'])" 2>/dev/null)
+print(d[0]['lessons'][0])" 2>/dev/null)
 if [ -n "${LESSON_ID:-}" ]; then
   run_ok "learn lesson"      "${BIN[@]}" learn lesson --id "$LESSON_ID"
   run_ok "learn complete"    "${BIN[@]}" learn complete --id "$LESSON_ID" --user "$ADMIN" --password "$APW"

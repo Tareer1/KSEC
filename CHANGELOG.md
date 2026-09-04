@@ -28,8 +28,12 @@ All notable changes are tracked here. Format follows
 - End-to-end walkthrough at `docs/walkthrough.md`
 - Guides: installation, CLI reference, architecture, security model,
   operations, troubleshooting, QA & release (`docs/`)
-- Repeatable CLI smoke suite (`scripts/smoke.sh`, `make smoke`) — 150+ checks
-- 262 unit tests
+- Repeatable CLI smoke suite (`scripts/smoke.sh`, `make smoke`) — 156 checks
+- Capability-as-workflow: any registered capability (incl. plugins) runs as a
+  single-step workflow, e.g. `ksec run http_headers example.com`
+- URL / host:port targets normalize to their host for scope matching
+  (`https://example.com` matches a scope rule for `example.com`)
+- 266 unit tests
 
 ## [0.1.0] - 2026-09-04
 

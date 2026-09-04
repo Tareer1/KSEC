@@ -206,8 +206,10 @@ class WorkflowStore:
         self.db.execute("DELETE FROM custom_workflows WHERE name = ?", (name,))
 
     def resolve(self, name: str) -> WorkflowDefinition | None:
-        """Resolve a workflow name: built-ins first, then custom workflows."""
-        from ksec.workflows.definitions import get_workflow
+        """Resolve a workflow name: built-ins, then custom workflows, then
+        capability-as-workflow (any registered adapter — including plugin
+        capabilities — runs as a single-step workflow)."""
+        from ksec.workflows.definitions import WorkflowDefinition, WorkflowStep, get_workflow
 
         builtin = get_workflow(name)
         if builtin is not None:
@@ -215,6 +217,12 @@ class WorkflowStore:
         custom = self.get_by_name(name)
         if custom is not None and custom.enabled:
             return custom.to_definition()
+        if self.adapters is not None and self.adapters.get(name) is not None:
+            return WorkflowDefinition(
+                name=name,
+                description=f"Single-step run of capability {name}",
+                steps=(WorkflowStep(name),),
+            )
         return None
 
     @staticmethod

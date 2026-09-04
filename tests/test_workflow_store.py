@@ -131,6 +131,26 @@ class CustomWorkflowExecutionTest(KsecTestCase):
         self.assertEqual(run.status, "failed")
         self.assertEqual(run.steps[0].state, "blocked")
 
+    def test_resolve_unknown_returns_none(self):
+        self.assertIsNone(self.ctx.workflow_store.resolve("does-not-exist"))
+
+    def test_resolve_capability_as_single_step_workflow(self):
+        from ksec.adapters.base import CommandRequest, ToolAdapter
+
+        class FakeAdapter(ToolAdapter):
+            name = "fake"
+            capability = "my_http_probe"
+
+            def build_command(self, request: CommandRequest) -> list[str]:
+                return ["echo", request.target]
+
+        self.ctx.adapters.register(FakeAdapter())
+        definition = self.ctx.workflow_store.resolve("my_http_probe")
+        self.assertIsNotNone(definition)
+        self.assertEqual(definition.name, "my_http_probe")
+        self.assertEqual(len(definition.steps), 1)
+        self.assertEqual(definition.steps[0].capability, "my_http_probe")
+
     def test_history_records_runs(self):
         self.ctx.workflow_store.create(
             "my-flow", steps=[{"capability": "test_scan"}]

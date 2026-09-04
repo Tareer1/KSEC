@@ -9,6 +9,7 @@ from __future__ import annotations
 import ipaddress
 import sqlite3
 from dataclasses import dataclass
+from urllib.parse import urlsplit
 
 from ksec.core.errors import AuthorizationError
 from ksec.db.connection import Database
@@ -17,14 +18,36 @@ from ksec.identity.users import now_utc
 VALID_EFFECTS = ("allow", "deny")
 
 
+def _normalize_target(target: str) -> str:
+    """Reduce a target to its host for scope matching.
+
+    ``https://example.com/path`` -> ``example.com``, ``example.com:8080`` ->
+    ``example.com``, ``1.2.3.4:80`` -> ``1.2.3.4``. IPv6 literals are left
+    untouched (multiple colons).
+    """
+    t = target.strip().lower()
+    try:
+        parts = urlsplit(t)
+        if parts.scheme and parts.netloc and parts.hostname:
+            return parts.hostname
+    except ValueError:
+        pass
+    if t.count(":") == 1:
+        host, _, port = t.rpartition(":")
+        if host and port.isdigit():
+            return host
+    return t
+
+
 def target_matches(target: str, pattern: str) -> bool:
     """Match a target against an authorization pattern.
 
-    Supports ``*`` (everything), exact IP/domain match, CIDR ranges, and
-    domain suffix matching (``example.com`` or ``.example.com`` also matches
-    ``sub.example.com``).
+    Supports ``*`` (everything), exact IP/domain match, CIDR ranges, domain
+    suffix matching (``example.com`` or ``.example.com`` also matches
+    ``sub.example.com``), and URL/port forms (``https://example.com`` or
+    ``example.com:443`` match a scope rule for ``example.com``).
     """
-    target = target.strip().lower()
+    target = _normalize_target(target)
     pattern = pattern.strip().lower()
     if not target or not pattern:
         return False

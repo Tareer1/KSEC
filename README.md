@@ -74,7 +74,7 @@ Implemented so far (spec Stages 1–9 core, interfaces included):
 - [x] CLI: `init status doctor version config env tools session engagement
       assess job asset finding evidence case report learn backup tui dashboard
       admin user audit plugin intel dfir soc workflow adversary update notify run`
-- [x] 262 unit tests (stdlib unittest, no dependencies) + 150-step CLI smoke suite
+- [x] 266 unit tests (stdlib unittest, no dependencies) + 156-step CLI smoke suite
   (`python3 -m unittest discover -s tests` / `bash scripts/smoke.sh`)
 - [x] v0.2.0 — changelog in `CHANGELOG.md`; docs in [`docs/`](docs/README.md)
 

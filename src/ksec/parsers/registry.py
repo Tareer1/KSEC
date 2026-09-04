@@ -8,11 +8,15 @@ from __future__ import annotations
 
 from ksec.parsers.base import OutputParser
 from ksec.parsers.dns import DigParser
+from ksec.parsers.dnsrecon import DnsreconParser
 from ksec.parsers.gobuster import GobusterParser
 from ksec.parsers.http_probe import HttpProbeParser
+from ksec.parsers.hydra import HydraParser
 from ksec.parsers.nikto import NiktoParser
 from ksec.parsers.nmap_xml import NmapXmlParser
+from ksec.parsers.smb import Enum4LinuxParser, SmbMapParser
 from ksec.parsers.tls_scan import TlsScanParser
+from ksec.parsers.wpscan import WpscanParser
 
 # Canonical entries keyed by the parser's own name.
 _PARSERS: dict[str, OutputParser] = {
@@ -22,6 +26,11 @@ _PARSERS: dict[str, OutputParser] = {
     TlsScanParser().name: TlsScanParser(),
     GobusterParser().name: GobusterParser(),
     NiktoParser().name: NiktoParser(),
+    DnsreconParser().name: DnsreconParser(),
+    WpscanParser().name: WpscanParser(),
+    HydraParser().name: HydraParser(),
+    Enum4LinuxParser().name: Enum4LinuxParser(),
+    SmbMapParser().name: SmbMapParser(),
 }
 
 # Tool-name aliases for convenience / legacy references.
@@ -32,6 +41,11 @@ _ALIASES: dict[str, str] = {
     "sslscan": "tls_scan",
     "gobuster": "gobuster",
     "nikto": "nikto",
+    "dnsrecon": "dnsrecon",
+    "wpscan": "wpscan",
+    "hydra": "hydra",
+    "enum4linux": "enum4linux",
+    "smbmap": "smbmap",
 }
 
 

@@ -25,6 +25,9 @@ class ToolAdapter(ABC):
     description: str = ""
     safety: str = "ACTIVE_SAFE"  # PASSIVE | ACTIVE_SAFE | ACTIVE_AGGRESSIVE
     default_parser: str = ""
+    # Which captured stream the parser should read: some tools (e.g.
+    # dnsrecon >= 1.6) emit their structured output on stderr.
+    output_stream: str = "stdout"  # stdout | stderr
 
     @abstractmethod
     def build_command(self, request: CommandRequest) -> list[str]:

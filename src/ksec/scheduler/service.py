@@ -301,7 +301,8 @@ class Scheduler:
             self.jobs.fail(job_id, f"Timed out after {self.config.default_timeout_seconds}s", exit_code=None)
             return
 
-        parsed = adapter.parse_output(stdout) if proc.returncode == 0 else None
+        parsed_stream = stderr if adapter.output_stream == "stderr" else stdout
+        parsed = adapter.parse_output(parsed_stream) if proc.returncode == 0 else None
         outcome = {
             "exit_code": proc.returncode,
             "stdout": stdout,

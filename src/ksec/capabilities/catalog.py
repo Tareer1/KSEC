@@ -32,6 +32,11 @@ TOOLS: list[ToolDefinition] = [
     ToolDefinition("curl", "curl", "web", "http_probe", "HTTP probing", "curl"),
     ToolDefinition("traceroute", "inetutils-traceroute", "network", "traceroute", "Network path discovery", "traceroute"),
     ToolDefinition("john", "john", "cracking", "password_crack", "Password cracking", "john"),
+    ToolDefinition("dnsrecon", "dnsrecon", "recon", "dns_enum", "DNS record enumeration", "dnsrecon"),
+    ToolDefinition("wpscan", "wpscan", "web", "wpscan", "WordPress vulnerability scanner", "wpscan"),
+    ToolDefinition("hydra", "hydra", "cracking", "auth_test", "Online login/authentication testing", "hydra"),
+    ToolDefinition("enum4linux", "enum4linux", "network", "smb_enum", "SMB/NetBIOS enumeration", "enum4linux"),
+    ToolDefinition("smbmap", "smbmap", "network", "smb_map", "SMB share and access mapping", "smbmap"),
 ]
 
 # Capability -> permission required to run it (RBAC boundary).
@@ -47,6 +52,11 @@ CAPABILITY_PERMISSION: dict[str, str] = {
     "whois_lookup": "recon.run",
     "subdomain_enum": "recon.run",
     "traceroute": "recon.run",
+    "dns_enum": "recon.run",
+    "wpscan": "assess.run",
+    "auth_test": "assess.run",
+    "smb_enum": "assess.run",
+    "smb_map": "assess.run",
 }
 
 

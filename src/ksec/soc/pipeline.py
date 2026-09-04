@@ -192,10 +192,21 @@ class SocPipeline:
         }
 
     def _evaluate_rules(self, event: NormalizedEvent) -> list[DetectionRule]:
-        """Stage 4: deterministic rule evaluation."""
+        """Stage 4: deterministic rule evaluation.
+
+        Single-event rules match against this event directly; windowed rules
+        (count-based, e.g. "5 failures in 5 minutes") are evaluated against
+        the stored events inside their time window and fire when the incoming
+        event crosses the threshold.
+        """
         matched = []
         for rule in self.rules.list(enabled_only=True):
+            if rule.windowed:
+                continue
             if rule.matches(event):
+                matched.append(rule)
+        for rule in self.rules.windowed_rules():
+            if self.rules.evaluate_windowed(rule, event):
                 matched.append(rule)
         return matched
 

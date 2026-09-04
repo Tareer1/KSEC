@@ -360,8 +360,10 @@ TOPICS: tuple[Topic, ...] = (
             ("p", "Artifacts attach evidence to a case (type: file/log/process/network/auth/...). Timeline events reconstruct what happened when, in order."),
             ("p", "Combine with SOC alerts: alert opens case -> DFIR adds the story -> case closes with evidence."),
             ("cmd", "ksec dfir artifact add --case 1 --type log --name auth.log --tool collector"),
-            ("cmd", "ksec dfir timeline --case 1"),
+            ("cmd", "ksec dfir artifact hash 1 --path /evidence/auth.log   # record SHA-256 of the collected file"),
             ("cmd", "ksec dfir event add --case 1 --time 2026-09-04T10:00:00Z --type auth_failure --details 'brute force burst'"),
+            ("cmd", "ksec dfir timeline --case 1"),
+            ("cmd", "ksec dfir export --case 1 --format jsonl --out case-1.jsonl   # shareable chronology"),
         ),
     ),
     Topic(
@@ -435,9 +437,113 @@ TOPICS: tuple[Topic, ...] = (
         sections=(
             ("p", "Bundled example: plugins/web/http_headers adds an http_headers capability that runs as a workflow: ksec run http_headers example.com."),
             ("cmd", "ksec plugin list"),
-            ("cmd", "ksec plugin install --path plugins/web/http_headers --user admin --password ..."),
-            ("cmd", "ksec plugin enable http_headers"),
-            ("tip", "Developer guide: docs in plugins/README.md."),
+            ("cmd", "ksec plugin new http-headers --tool curl --category web   # scaffold a plugin"),
+            ("cmd", "ksec plugin install plugins/web/http_headers --trust LOCAL --user admin --password ... --yes"),
+            ("cmd", "ksec plugin check"),
+            ("tip", "ksec plugin new generates a valid manifest + adapter + parser skeleton — fill in the logic, then install."),
+        ),
+    ),
+    Topic(
+        id="siem",
+        title="SIEM ingestion — logs flow into SOC by themselves",
+        kind="module",
+        audience=("all", "blue"),
+        summary=(
+            "ksec siem connects real log streams to the SOC pipeline: a UDP listener treats "
+            "each datagram as one record (syslog format), and a file watcher ingests appended "
+            "log lines. Every record goes through normalize -> rules -> alerts like a manual "
+            "ingest, with deduplication built in."
+        ),
+        keywords=("siem", "syslog", "log collector", "udp", "log stream", "file watch", "auto ingest", "rsyslog", "siem kya hai"),
+        sections=(
+            ("p", "Supported record formats (auto-detected): JSONL (one JSON event per line), RFC3164 syslog (host tag[pid]: message) and auditd-style key=value records. IPs/domains inside the message are extracted automatically."),
+            ("p", "Each record gets a deterministic id from its content — restarting the listener or re-sending a burst never duplicates events."),
+            ("p", "Point rsyslog at it: '*.* @127.0.0.1:5514' or pipe tools: 'tail -F auth.log | ksec siem watch /dev/stdin'."),
+            ("cmd", "ksec siem listen --port 5514 --source syslog          # run forever, Ctrl+C to stop"),
+            ("cmd", "ksec siem watch /var/log/auth.log --source filewatch"),
+            ("cmd", "ksec siem watch /var/log --once                      # bulk backfill existing files"),
+            ("cmd", "ksec siem demo --ingest                            # show all formats end-to-end"),
+            ("tip", "Combine with a windowed rule (ksec ask windowed-rules) to alert on brute force automatically."),
+        ),
+    ),
+    Topic(
+        id="windowed-rules",
+        title="Windowed rules — '5 failures in 5 minutes' detection",
+        kind="concept",
+        audience=("all", "blue"),
+        summary=(
+            "A windowed detection rule counts matching events inside a time window and fires "
+            "once when the count crosses its threshold — the classic brute-force detector: "
+            "5 auth_failures from one IP within 5 minutes."
+        ),
+        keywords=("window", "windowed", "threshold", "count", "within", "brute force", "bruteforce", "failed logins", "time window", "repeat"),
+        sections=(
+            ("p", "Add --within <minutes> --count <N> to any rule whose operator is eq/contains/min_severity. The rule's value stays the match text (e.g. the IP), --count is how many matches inside the window trigger it."),
+            ("p", "It fires exactly once per burst (when the incoming event crosses N), so you get one alert per attack — not a flood. Different IPs are counted separately because the filter is per-value."),
+            ("cmd", "ksec soc rule add --name ssh-brute --event-type auth_failure --field ip --operator eq --value 203.0.113.66 --within 5 --count 5 --severity high"),
+            ("cmd", "ksec soc rule list"),
+            ("cmd", "ksec siem demo --ingest   # feed it and watch it fire"),
+            ("tip", "Windowed rules use the same alert/risk/case pipeline — a crossing event opens the case automatically when severity is high."),
+        ),
+    ),
+    Topic(
+        id="api",
+        title="The REST API — scripts and SIEMs drive KSEC",
+        kind="module",
+        audience=("all",),
+        summary=(
+            "ksec api exposes KSEC over HTTP/JSON with revocable bearer tokens: read status, "
+            "jobs, findings, alerts, cases; write events, alert actions, and run scope-checked "
+            "capabilities. Every request passes the same policy + audit as the CLI."
+        ),
+        keywords=("api", "rest", "token", "http", "json api", "curl", "automation", "integration", "script", "webhook"),
+        sections=(
+            ("p", "Tokens are stored hashed (never plaintext) and shown once at creation — revoke a token and it dies instantly."),
+            ("p", "The API cannot bypass scope: running a tool against an out-of-scope target returns a refusal, exactly like the CLI."),
+            ("cmd", "ksec api token create --user admin --password ... --name ci"),
+            ("cmd", "ksec api serve --host 127.0.0.1 --port 9090"),
+            ("cmd", "curl -H 'Authorization: Bearer <token>' http://127.0.0.1:9090/api/status"),
+            ("cmd", "curl -H 'Authorization: Bearer <token>' -X POST http://127.0.0.1:9090/api/alerts/1/ack"),
+            ("tip", "Bind to 127.0.0.1 (default) unless you need remote access — then use a firewall + short-lived tokens."),
+        ),
+    ),
+    Topic(
+        id="schedules",
+        title="Recurring jobs — automation without a human",
+        kind="module",
+        audience=("all", "red", "blue", "purple"),
+        summary=(
+            "ksec job schedule runs a capability on a cron timer (e.g. daily DNS recon at "
+            "06:00) through the normal scheduler + audit trail. Creation checks scope, and "
+            "every run re-checks it — automation can never target an unauthorized host."
+        ),
+        keywords=("schedule", "recurring", "cron", "timer", "daily", "automation", "repeat", "job schedule", "scheduled"),
+        sections=(
+            ("p", "Cron format: 5 fields (minute hour day month weekday), with *, */step, ranges and lists. Example: '0 6 * * *' = every day 06:00."),
+            ("p", "Use case: daily passive recon + IOC diff, weekly TLS re-check of your own estate, hourly auth-failure watch."),
+            ("cmd", "ksec job schedule add dns_enum example.com --cron '0 6 * * *' --engagement 1 --user admin"),
+            ("cmd", "ksec job schedule list"),
+            ("cmd", "ksec job schedule run 1        # run now (re-checks scope)"),
+            ("cmd", "ksec job schedule remove 1"),
+            ("tip", "Scheduled job runs appear in ksec audit list with actor=schedule — automation is audited like everything else."),
+        ),
+    ),
+    Topic(
+        id="dashboard",
+        title="The web dashboard — SOC triage in a browser",
+        kind="module",
+        audience=("all", "blue"),
+        summary=(
+            "ksec dashboard start opens a local web page with an overview and live SOC views: "
+            "ack/resolve/close alerts and close cases from the browser. Every click is "
+            "recorded in the audit log (actor=dashboard)."
+        ),
+        keywords=("dashboard", "web", "browser", "gui", "ui", "triage", "html"),
+        sections=(
+            ("p", "The page is read-mostly with triage buttons — keep it bound to 127.0.0.1; use ksec api with tokens for anything reachable by others."),
+            ("cmd", "ksec dashboard start --port 8080"),
+            ("cmd", "open http://127.0.0.1:8080/soc"),
+            ("tip", "#overview / #soc / #cases hash links switch the view; the page auto-refreshes data on each action."),
         ),
     ),
     # -----------------------------------------------------------------------
@@ -761,7 +867,7 @@ TOPICS: tuple[Topic, ...] = (
             ("cmd", "ksec session open --user learner --workspace LEARN_WORK"),
             ("cmd", "ksec learn list"),
             ("p", "STEP 2 — Explore lessons and mark progress."),
-            ("cmd", "ksec learn show 1"),
+            ("cmd", "ksec learn lesson --id 1"),
             ("cmd", "ksec learn complete --id 1 --user learner"),
             ("p", "STEP 3 — Level up: progress records your journey through Explorer -> ... -> Expert."),
             ("cmd", "ksec learn progress --user learner"),

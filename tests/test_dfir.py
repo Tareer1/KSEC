@@ -108,6 +108,111 @@ class DfirTest(KsecTestCase):
         self.assertIn("dfir.event.add", types)
 
 
+class DfirHashExportTest(KsecTestCase):
+    """Artifact hashing and case chronology export."""
+
+    def setUp(self):
+        super().setUp()
+        self.ctx = self.make_context()
+        self.case = self.ctx.cases.create(title="Hash case", severity="medium")
+        self.artifact = self.ctx.dfir.add_artifact(
+            self.case.id, "collected.bin", "file", tool="collector",
+        )
+
+    def tearDown(self):
+        self.ctx.close()
+        super().tearDown()
+
+    def _sample_file(self, content: bytes) -> str:
+        import hashlib
+        import os
+
+        path = os.path.join(self.tmp_dir, "evidence.bin")
+        with open(path, "wb") as handle:
+            handle.write(content)
+        return path
+
+    def test_hash_artifact_records_sha256(self):
+        import hashlib
+
+        content = b"forensic-copy-data-1234"
+        path = self._sample_file(content)
+        result = self.ctx.dfir.hash_artifact(self.artifact.id, path)
+        self.assertEqual(result["sha256"], hashlib.sha256(content).hexdigest())
+        self.assertEqual(result["size"], len(content))
+        # Hash block persisted on the artifact details.
+        stored = self.ctx.dfir.get_artifact(self.artifact.id)
+        self.assertIn("sha256=" + result["sha256"], stored.details)
+
+    def test_hash_unknown_artifact_and_missing_file(self):
+        with self.assertRaises(ValueError):
+            self.ctx.dfir.hash_artifact(999, "/nonexistent")
+        with self.assertRaises(ValueError):
+            self.ctx.dfir.hash_artifact(self.artifact.id, "/nonexistent/file")
+
+    def test_chronology_merges_artifacts_and_events_sorted(self):
+        self.ctx.dfir.add_event(
+            self.case.id, "2026-09-04T10:00:00Z", "executed",
+            actor="attacker", details="payload ran",
+        )
+        rows = self.ctx.dfir.chronology(case_id=self.case.id)
+        kinds = [r["kind"] for r in rows]
+        self.assertIn("artifact", kinds)
+        self.assertIn("event", kinds)
+        times = [r["time"] or "" for r in rows]
+        self.assertEqual(times, sorted(times))
+
+    def test_export_csv_and_jsonl(self):
+        import io
+        from contextlib import redirect_stdout
+        from types import SimpleNamespace
+
+        from ksec.cli.dfir import cmd_export
+
+        self.ctx.dfir.add_event(
+            self.case.id, "2026-09-04T10:00:00Z", "executed", actor="attacker",
+        )
+        for fmt in ("csv", "jsonl"):
+            buffer = io.StringIO()
+            with redirect_stdout(buffer):
+                code = cmd_export(
+                    self.ctx,
+                    SimpleNamespace(case=self.case.id, format=fmt, out=None,
+                                    json=False, quiet=False),
+                )
+            self.assertEqual(code, 0)
+            text = buffer.getvalue()
+            self.assertIn("artifact", text)
+            self.assertIn("event", text)
+
+    def test_export_to_file(self):
+        import os
+        from types import SimpleNamespace
+
+        from ksec.cli.dfir import cmd_export
+
+        out = os.path.join(self.tmp_dir, "case.jsonl")
+        code = cmd_export(
+            self.ctx,
+            SimpleNamespace(case=self.case.id, format="jsonl", out=out,
+                            json=False, quiet=False),
+        )
+        self.assertEqual(code, 0)
+        with open(out, encoding="utf-8") as handle:
+            self.assertTrue(handle.read().strip())
+
+    def test_export_unknown_case(self):
+        from types import SimpleNamespace
+
+        from ksec.cli.dfir import cmd_export
+
+        code = cmd_export(
+            self.ctx,
+            SimpleNamespace(case=999, format="csv", out=None, json=False, quiet=False),
+        )
+        self.assertEqual(code, 1)
+
+
 if __name__ == "__main__":
     import unittest
 

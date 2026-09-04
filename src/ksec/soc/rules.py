@@ -3,6 +3,13 @@
 Deterministic rules evaluate normalized events: field equality, inequality,
 substring, regex and minimum-severity gates. A rule that fires contributes a
 severity and a risk boost; rules may auto-open cases.
+
+Windowed rules (``window_minutes`` set) are count-based: they fire when the
+number of events matching the rule's filter inside the time window reaches
+the rule's ``value`` threshold — e.g. ``event_type=auth_failure username=x
+--within 5 --value 5`` fires on the 5th failed login in 5 minutes
+(brute-force detection). A windowed rule fires exactly once per burst: only
+when the incoming event crosses the threshold.
 """
 from __future__ import annotations
 
@@ -15,6 +22,7 @@ from ksec.db.connection import Database
 from ksec.identity.users import now_utc
 
 OPERATORS = ("eq", "ne", "contains", "regex", "min_severity")
+WINDOW_OPERATORS = ("eq", "contains", "min_severity")
 _FIELDS = (
     "ip", "domain", "host", "username", "process", "source",
     "event_type", "severity", "details",
@@ -35,8 +43,21 @@ class DetectionRule:
     severity: str
     risk_boost: float
     open_case: bool
-    created_at: str
-    updated_at: str
+    window_minutes: int | None = None
+    window_count: int | None = None
+    created_at: str = ""
+    updated_at: str = ""
+
+    @property
+    def windowed(self) -> bool:
+        return bool(self.window_minutes)
+
+    @property
+    def count_threshold(self) -> int:
+        try:
+            return max(1, int(self.window_count or 1))
+        except (TypeError, ValueError):
+            return 1
 
     def to_dict(self) -> dict:
         return {
@@ -51,10 +72,16 @@ class DetectionRule:
             "severity": self.severity,
             "risk_boost": self.risk_boost,
             "open_case": self.open_case,
+            "window_minutes": self.window_minutes,
+            "window_count": self.window_count,
         }
 
     def matches(self, event) -> bool:
         """Evaluate this rule against a :class:`NormalizedEvent`."""
+        if self.windowed:
+            # Windowed rules are evaluated against the event store (SQL), not
+            # a single event — see RuleStore.evaluate_windowed.
+            return False
         if self.event_type and self.event_type != event.event_type:
             return False
         if self.operator == "min_severity":
@@ -84,6 +111,32 @@ class DetectionRule:
         value = getattr(event, self.field, "")
         return value or ""
 
+    # -- windowed evaluation (SQL filter over stored events) ----------------
+
+    def window_sql(self) -> tuple[str, list]:
+        """SQL WHERE fragment matching this rule's filter over ``soc_events``.
+
+        Returns (sql, params); ``details`` matches against the JSON blob text.
+        """
+        clauses: list[str] = []
+        params: list = []
+        if self.event_type:
+            clauses.append("event_type = ?")
+            params.append(self.event_type)
+        field_col = "details" if self.field == "details" else self.field
+        if self.operator == "min_severity":
+            min_rank = SEVERITY_RANK.get(self.value, 2)
+            allowed = [s for s, r in SEVERITY_RANK.items() if r >= min_rank]
+            clauses.append("severity IN ({})".format(",".join("?" * len(allowed))))
+            params.extend(allowed)
+        elif self.operator == "contains":
+            clauses.append(f"LOWER({field_col}) LIKE ?")
+            params.append(f"%{self.value.lower()}%")
+        else:  # eq
+            clauses.append(f"LOWER({field_col}) = ?")
+            params.append(self.value.lower())
+        return " AND ".join(clauses), params
+
 
 class RuleStore:
     def __init__(self, db: Database):
@@ -101,9 +154,12 @@ class RuleStore:
         severity: str = "medium",
         risk_boost: float = 0.0,
         open_case: bool = True,
+        window_minutes: int | None = None,
+        window_count: int | None = None,
     ) -> DetectionRule:
         errors = self.validate(
-            name=name, field=field, operator=operator, severity=severity
+            name=name, field=field, operator=operator, severity=severity,
+            window_minutes=window_minutes, window_count=window_count,
         )
         if errors:
             raise KSECError(f"invalid rule: {'; '.join(errors)}")
@@ -112,10 +168,13 @@ class RuleStore:
             with self.db.transaction() as conn:
                 cursor = conn.execute(
                     "INSERT INTO detection_rules (name, description, enabled, event_type,"
-                    " field, operator, value, severity, risk_boost, open_case, created_at,"
-                    " updated_at) VALUES (?, ?, 1, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                    " field, operator, value, severity, risk_boost, open_case,"
+                    " window_minutes, window_count, created_at, updated_at)"
+                    " VALUES (?, ?, 1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                     (name.strip(), description, event_type, field, operator, value,
-                     severity, float(risk_boost), 1 if open_case else 0, now, now),
+                     severity, float(risk_boost), 1 if open_case else 0,
+                     int(window_minutes) if window_minutes else None,
+                     int(window_count) if window_count else None, now, now),
                 )
         except sqlite3.IntegrityError as exc:
             raise KSECError(f"rule {name!r} already exists") from exc
@@ -124,7 +183,10 @@ class RuleStore:
         return rule
 
     @staticmethod
-    def validate(*, name: str, field: str, operator: str, severity: str) -> list[str]:
+    def validate(
+        *, name: str, field: str, operator: str, severity: str,
+        window_minutes: int | None = None, window_count: int | None = None,
+    ) -> list[str]:
         errors: list[str] = []
         if not name or not name.strip():
             errors.append("name is required")
@@ -134,7 +196,51 @@ class RuleStore:
             errors.append(f"operator must be one of {', '.join(OPERATORS)}")
         if severity not in SEVERITY_RANK:
             errors.append("severity must be info|low|medium|high|critical")
+        if window_minutes is not None:
+            if int(window_minutes) < 1 or int(window_minutes) > 1440:
+                errors.append("window_minutes must be between 1 and 1440")
+            if operator not in WINDOW_OPERATORS:
+                errors.append(
+                    f"windowed rules support operators: {', '.join(WINDOW_OPERATORS)}"
+                )
+            if window_count is None or int(window_count) < 2:
+                errors.append("windowed rules require --count >= 2 (events in window)")
         return errors
+
+    # -- windowed evaluation -------------------------------------------------
+
+    def windowed_rules(self) -> list[DetectionRule]:
+        """Enabled rules with a time window (count-based detection)."""
+        return [r for r in self.list(enabled_only=True) if r.windowed]
+
+    def evaluate_windowed(self, rule: DetectionRule, event) -> bool:
+        """True when ``event`` crosses the rule's count threshold in its window.
+
+        Fires exactly once per burst: only when the incoming event raises the
+        windowed count from below the threshold to at-or-above it.
+        """
+        if not rule.windowed:
+            return False
+        filter_sql, params = rule.window_sql()
+        threshold = rule.count_threshold
+        row = self.db.query_one(
+            "SELECT COUNT(*) AS n FROM soc_events WHERE {f} AND"
+            " datetime(occurred_at) >= datetime('now', ?)".format(f=filter_sql),
+            params + [f"-{int(rule.window_minutes)} minutes"],
+        )
+
+        total = row["n"] if row else 0
+        if total < threshold:
+            return False
+        # Count without the current event: crossed the threshold only when the
+        # count was below it before this event arrived.
+        before = self.db.query_one(
+            "SELECT COUNT(*) AS n FROM soc_events WHERE {f} AND"
+            " datetime(occurred_at) >= datetime('now', ?) AND id != ?".format(f=filter_sql),
+            params + [f"-{int(rule.window_minutes)} minutes", event.id],
+        )
+        n_before = before["n"] if before else 0
+        return n_before < threshold <= total
 
     def get(self, rule_id: int) -> DetectionRule | None:
         row = self.db.query_one(
@@ -182,6 +288,8 @@ class RuleStore:
             severity=row["severity"],
             risk_boost=row["risk_boost"] or 0.0,
             open_case=bool(row["open_case"]),
+            window_minutes=row["window_minutes"],
+            window_count=row["window_count"],
             created_at=row["created_at"],
             updated_at=row["updated_at"],
         )

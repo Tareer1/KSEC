@@ -147,6 +147,9 @@ class EventNormalizer:
                 raw.get("ip"), raw.get("host"), raw.get("domain"),
                 details.get("ip"), details.get("dst_ip"), details.get("src_ip"),
                 details.get("host"), details.get("domain"),
+                # Free-text records (syslog messages, scan logs) often carry
+                # the observed IP/domain inside the message body.
+                details.get("message"),
             )
             if v
         )

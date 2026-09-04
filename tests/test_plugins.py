@@ -376,6 +376,77 @@ class PluginCliTest(KsecTestCase):
         self.assertIn("authorization denied", data["error"])
 
 
+class ScaffoldTest(KsecTestCase):
+    """ksec plugin new — generated skeleton validates out of the box."""
+
+    def setUp(self):
+        super().setUp()
+        from ksec.plugins.scaffold import scaffold_plugin
+
+        self.scaffold = scaffold_plugin
+        self.base = Path(self.tmp_dir) / "gen"
+
+    def test_scaffold_creates_valid_plugin(self):
+        path = self.scaffold(
+            "http-headers",
+            target_dir=self.base,
+            capability="http-headers",
+            tool="curl",
+            category="web",
+            author="REBEL",
+        )
+        self.assertTrue((path / MANIFEST_NAME).is_file())
+        self.assertTrue((path / "adapter.py").is_file())
+        self.assertTrue((path / "parser.py").is_file())
+        manifest = load_manifest(path)
+        self.assertEqual(manifest.id, "http-headers")
+        # Capability normalized to core underscore convention.
+        self.assertEqual(manifest.capabilities, ("http_headers",))
+        self.assertEqual(manifest.adapters[0].capability, "http_headers")
+        self.assertIn("tool.execute", manifest.permissions)
+
+    def test_scaffold_adapter_and_parser_importable(self):
+        path = self.scaffold(
+            "port-probe", target_dir=self.base, tool="nc", category="network"
+        )
+        import importlib.util
+
+        for module, class_suffix in (("adapter.py", "Adapter"), ("parser.py", "Parser")):
+            spec = importlib.util.spec_from_file_location(
+                f"scaffold_{module.replace('.', '_')}", path / module
+            )
+            module_obj = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(module_obj)
+            class_name = "PortProbe" + class_suffix
+            cls = getattr(module_obj, class_name)
+            self.assertTrue(cls)
+
+    def test_scaffold_rejects_bad_input(self):
+        with self.assertRaises(KSECError):
+            self.scaffold("!!!", target_dir=self.base)  # no slugifiable id
+        with self.assertRaises(KSECError):
+            self.scaffold("ok", target_dir=self.base, category="nope")
+        with self.assertRaises(KSECError):
+            self.scaffold("ok", target_dir=self.base, safety="BANANAS")
+        with self.assertRaises(KSECError):
+            self.scaffold("ok", target_dir=self.base, trust_level="ROOT")
+
+    def test_scaffold_refuses_existing_dir(self):
+        path = self.scaffold("dup", target_dir=self.base)
+        with self.assertRaises(KSECError):
+            self.scaffold("dup", target_dir=self.base)
+        self.assertTrue(path.is_dir())
+
+    def test_scaffold_perspective_permissions(self):
+        passive = self.scaffold("looker", target_dir=self.base, safety="PASSIVE")
+        manifest = load_manifest(passive)
+        self.assertIn("filesystem.read", manifest.permissions)
+        self.assertNotIn("tool.execute", manifest.permissions)
+        aggressive = self.scaffold("hitter", target_dir=self.base, safety="ACTIVE_AGGRESSIVE")
+        manifest = load_manifest(aggressive)
+        self.assertIn("network.listen", manifest.permissions)
+
+
 if __name__ == "__main__":
     import unittest
 

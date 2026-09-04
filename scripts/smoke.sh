@@ -370,6 +370,65 @@ wait "$APID" 2>/dev/null
 "${BIN[@]}" api token revoke 1 --user "$ADMIN" --password "$APW" >/dev/null 2>&1 && { PASS=$((PASS + 1)); echo "PASS  api token revoke"; } || { FAIL=$((FAIL + 1)); FAILED+=("api revoke"); echo "FAIL  api token revoke"; }
 expect_fail "api token create bad password" "${BIN[@]}" api token create --name x --user "$ADMIN" --password wrong
 
+# 26. windowed rules ------------------------------------------------------
+say "26. Windowed SOC detection rules (count-in-window)"
+run_ok "windowed rule add" "${BIN[@]}" soc rule add --name smoke-brute --event-type auth_failure --field ip --operator eq --value 203.0.113.200 --within 5 --count 3 --severity high
+for i in 1 2 3; do
+  "${BIN[@]}" soc ingest --event-id "smoke-bf-$i" --source ssh --event-type auth_failure --severity low --ip 203.0.113.200 --username root >/dev/null 2>&1
+done
+ALERT_JSON=$("${BIN[@]}" soc alert list --limit 5 --json 2>/dev/null)
+if echo "$ALERT_JSON" | grep -q "smoke-brute"; then
+  PASS=$((PASS + 1)); echo "PASS  windowed rule fired on 3rd event"
+else
+  FAIL=$((FAIL + 1)); FAILED+=("windowed rule"); echo "FAIL  windowed rule fired on 3rd event"
+fi
+
+# 27. SIEM ingestion -------------------------------------------------------
+say "27. SIEM ingestion (demo + watch --once)"
+run_ok "siem demo" "${BIN[@]}" siem demo
+LOG=$KSEC_HOME/siem-test.log
+printf '<134>Jan  5 10:01:22 web1 sshd[2213]: Failed password for root from 203.0.113.201 port 51234 ssh2\n{"event_id": "smoke-zeek-1", "event_type": "conn", "ip": "203.0.113.202"}\n' > "$LOG"
+run_ok "siem watch --once" "${BIN[@]}" siem watch "$LOG" --once --source smoke
+if "${BIN[@]}" soc event list --limit 10 --json 2>/dev/null | grep -q '"event_id": "smoke-zeek-1"'; then
+  PASS=$((PASS + 1)); echo "PASS  siem watch ingested jsonl"
+else
+  FAIL=$((FAIL + 1)); FAILED+=("siem watch"); echo "FAIL  siem watch ingested jsonl"
+fi
+
+# 28. DFIR hash + export ---------------------------------------------------
+say "28. DFIR artifact hashing + case export"
+CASEID=$("${BIN[@]}" case create --title "smoke-dfir" --json 2>/dev/null | grep -o '"id": [0-9]*' | head -1 | grep -o '[0-9]*')
+echo "smoke-evidence-content" > "$KSEC_HOME/evidence.bin"
+"${BIN[@]}" dfir artifact add --case "$CASEID" --type file --name evidence.bin --tool smoke >/dev/null 2>&1
+run_ok "dfir artifact hash" "${BIN[@]}" dfir artifact hash 1 --path "$KSEC_HOME/evidence.bin"
+run_ok "dfir export jsonl" "${BIN[@]}" dfir export --case "$CASEID" --format jsonl
+
+# 29. plugin scaffold + interactive dashboard ------------------------------
+say "29. Plugin scaffold + interactive dashboard"
+GEN=$KSEC_HOME/gen
+run_ok "plugin new" "${BIN[@]}" plugin new smoke-tool --tool curl --category web --path "$GEN"
+if [ -f "$GEN/smoke-tool/manifest.json" ]; then
+  PASS=$((PASS + 1)); echo "PASS  plugin new manifest created"
+else
+  FAIL=$((FAIL + 1)); FAILED+=("plugin new"); echo "FAIL  plugin new manifest created"
+fi
+AID=$("${BIN[@]}" soc alert list --limit 1 --json 2>/dev/null | grep -o '"id": [0-9]*' | head -1 | grep -o '[0-9]*')
+"${BIN[@]}" dashboard start --host 127.0.0.1 --port 8994 >"$KSEC_HOME/dash.log" 2>&1 &
+DASHD=$!
+sleep 1.5
+if curl -s http://127.0.0.1:8994/api/v1/alerts 2>/dev/null | grep -q '"alerts"'; then
+  PASS=$((PASS + 1)); echo "PASS  dashboard alerts endpoint"
+else
+  FAIL=$((FAIL + 1)); FAILED+=("dashboard alerts"); echo "FAIL  dashboard alerts endpoint"
+fi
+if curl -s -X POST "http://127.0.0.1:8994/api/v1/alerts/$AID/action/ack" 2>/dev/null | grep -q acknowledged; then
+  PASS=$((PASS + 1)); echo "PASS  dashboard ack alert"
+else
+  FAIL=$((FAIL + 1)); FAILED+=("dashboard ack"); echo "FAIL  dashboard ack alert"
+fi
+kill "$DASHD" 2>/dev/null
+wait "$DASHD" 2>/dev/null
+
 # ---------------------------------------------------------------------------
 echo
 echo "=========================================="

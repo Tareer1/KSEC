@@ -3,9 +3,18 @@
 Forensic artifacts are collected with provenance (host, tool, evidence link)
 and timeline events reconstruct the incident chronology. Timeline events can
 be linked to artifacts and are always presented in chronological order.
+
+Forensic extras:
+
+* :meth:`hash_artifact` — record SHA-256/SHA-1 hashes of a collected file so
+  the examiner can later prove the copy matches the source
+* :meth:`chronology` — a merged, chronological view of artifacts and events
+  for export (CSV / JSONL) and reporting
 """
 from __future__ import annotations
 
+import hashlib
+import os
 import sqlite3
 from dataclasses import dataclass
 from datetime import datetime
@@ -214,6 +223,94 @@ class DfirService:
     def timeline(self, case_id: int | None = None) -> list[TimelineEvent]:
         """The incident timeline: all events in chronological order."""
         return self.list_events(case_id=case_id)
+
+    # -- forensics ---------------------------------------------------------
+
+    def hash_artifact(self, artifact_id: int, path: str) -> dict:
+        """Hash a collected file and record the hashes on the artifact.
+
+        Computes SHA-256 and SHA-1 over the file bytes plus size, then appends
+        a ``[hash]`` block to the artifact's details so the recorded values
+        travel with the artifact in lists and exports. Raises ValueError for
+        unknown artifacts or unreadable files.
+        """
+        artifact = self.get_artifact(artifact_id)
+        if artifact is None:
+            raise ValueError(f"Unknown artifact: {artifact_id}")
+        if not path or not os.path.isfile(path):
+            raise ValueError(f"no such file: {path}")
+        sha256 = hashlib.sha256()
+        sha1 = hashlib.sha1()
+        size = 0
+        try:
+            with open(path, "rb") as handle:
+                for chunk in iter(lambda: handle.read(65536), b""):
+                    sha256.update(chunk)
+                    sha1.update(chunk)
+                    size += len(chunk)
+        except OSError as exc:
+            raise ValueError(f"cannot read {path}: {exc}") from exc
+        block = (
+            f"[hash] sha256={sha256.hexdigest()} sha1={sha1.hexdigest()}"
+            f" size={size} path={os.path.abspath(path)}"
+        )
+        details = artifact.details
+        if details:
+            details = details + "\n" + block
+        else:
+            details = block
+        self.db.execute(
+            "UPDATE dfir_artifacts SET details = ? WHERE id = ?",
+            (details, artifact_id),
+        )
+        if self.audit:
+            self.audit.record(
+                event_type="dfir.artifact.hash",
+                workspace="BLUE_TEAM",
+                action="dfir.artifact.hash",
+                target=f"artifact:{artifact_id}",
+                payload={"sha256": sha256.hexdigest(), "size": size, "path": path},
+            )
+        return {
+            "artifact_id": artifact_id,
+            "sha256": sha256.hexdigest(),
+            "sha1": sha1.hexdigest(),
+            "size": size,
+            "path": os.path.abspath(path),
+        }
+
+    def chronology(self, case_id: int | None = None) -> list[dict]:
+        """Merged, chronological view of artifact collections and timeline
+        events for a case (export / reporting)."""
+        rows: list[dict] = []
+        for artifact in self.list_artifacts(case_id=case_id):
+            rows.append({
+                "kind": "artifact",
+                "time": artifact.collected_at,
+                "event_type": artifact.artifact_type,
+                "name": artifact.name,
+                "actor": "",
+                "source": artifact.tool or artifact.host,
+                "details": artifact.details,
+                "ref_id": artifact.id,
+            })
+        for event in self.list_events(case_id=case_id):
+            artifact_name = ""
+            if event.artifact_id:
+                linked = self.get_artifact(event.artifact_id)
+                if linked:
+                    artifact_name = linked.name
+            rows.append({
+                "kind": "event",
+                "time": event.event_time,
+                "event_type": event.event_type,
+                "name": artifact_name,
+                "actor": event.actor,
+                "source": event.source,
+                "details": event.details,
+                "ref_id": event.id,
+            })
+        return sorted(rows, key=lambda r: (r["time"] or "", r["kind"]))
 
     # -- helpers -----------------------------------------------------------
 

@@ -33,6 +33,7 @@ from ksec.cli import report as report_commands
 from ksec.cli import update as update_commands
 from ksec.cli import vuln as vuln_commands
 from ksec.cli import session as session_commands
+from ksec.cli import siem as siem_commands
 from ksec.cli import soc as soc_commands
 from ksec.cli import tools as tools_commands
 from ksec.cli import ui as ui_commands
@@ -373,6 +374,10 @@ def build_parser() -> argparse.ArgumentParser:
     d_list.add_argument("--case", type=int, default=None)
     d_list.add_argument("--host", default=None)
     d_list.set_defaults(func=dfir_commands.cmd_artifact_list)
+    d_hash = d_art_sub.add_parser("hash", help="Record SHA-256/SHA-1 of a collected file on an artifact", parents=[common])
+    d_hash.add_argument("id", type=int)
+    d_hash.add_argument("--path", required=True, help="Path to the collected file")
+    d_hash.set_defaults(func=dfir_commands.cmd_artifact_hash)
     d_ev = d_sub.add_parser("event", help="Timeline events", parents=[common])
     d_ev_sub = d_ev.add_subparsers(dest="event_command", metavar="EVENT_COMMAND")
     d_ev_add = d_ev_sub.add_parser("add", help="Add a timeline event", parents=[common])
@@ -388,6 +393,11 @@ def build_parser() -> argparse.ArgumentParser:
     d_tl.add_argument("--case", type=int, default=None)
     d_tl.add_argument("--event-type", default=None)
     d_tl.set_defaults(func=dfir_commands.cmd_timeline)
+    d_exp = d_sub.add_parser("export", help="Export case chronology (artifacts + timeline) as CSV or JSONL", parents=[common])
+    d_exp.add_argument("--case", type=int, required=True)
+    d_exp.add_argument("--format", default="csv", choices=["csv", "jsonl"])
+    d_exp.add_argument("--out", default=None, help="Write to a file instead of stdout")
+    d_exp.set_defaults(func=dfir_commands.cmd_export)
 
     # threat intelligence
     p_intel = sub.add_parser("intel", help="Threat intelligence (IOCs, actors, campaigns, TTPs)", parents=[common])
@@ -465,6 +475,17 @@ def build_parser() -> argparse.ArgumentParser:
     pl_info = pl_sub.add_parser("info", help="Show plugin details", parents=[common])
     pl_info.add_argument("name")
     pl_info.set_defaults(func=plugin_commands.cmd_plugin_info)
+    pl_new = pl_sub.add_parser("new", help="Scaffold a new plugin (manifest + adapter + parser)", parents=[common])
+    pl_new.add_argument("name", help="Plugin id / directory name, e.g. http-headers")
+    pl_new.add_argument("--capability", default=None, help="Capability id (default: derived from name)")
+    pl_new.add_argument("--tool", default=None, help="Binary the adapter invokes (default: capability)")
+    pl_new.add_argument("--category", default="other", choices=["discovery", "network", "web", "api", "wireless", "vulnerability", "cloud", "containers", "endpoint", "dfir", "malware", "threat_intel", "reporting", "compliance", "integrations", "other"])
+    pl_new.add_argument("--description", default=None)
+    pl_new.add_argument("--author", default=None)
+    pl_new.add_argument("--safety", default="ACTIVE_SAFE", choices=["PASSIVE", "ACTIVE_SAFE", "ACTIVE_AGGRESSIVE"])
+    pl_new.add_argument("--trust", default="LOCAL", choices=["CORE_TRUSTED", "VERIFIED", "LOCAL", "THIRD_PARTY", "UNTRUSTED", "BLOCKED"])
+    pl_new.add_argument("--path", default=None, help="Directory to create the plugin in (default: current directory)")
+    pl_new.set_defaults(func=plugin_commands.cmd_plugin_new)
     pl_install = pl_sub.add_parser("install", help="Install a plugin from a directory", parents=[common])
     pl_install.add_argument("path", help="Path to the plugin directory (contains manifest.json)")
     pl_install.add_argument("--trust", default="THIRD_PARTY", choices=["CORE_TRUSTED", "VERIFIED", "LOCAL", "THIRD_PARTY", "UNTRUSTED", "BLOCKED"])
@@ -644,6 +665,8 @@ def build_parser() -> argparse.ArgumentParser:
     r_add.add_argument("--severity", default="medium", choices=["info", "low", "medium", "high", "critical"])
     r_add.add_argument("--risk-boost", type=float, default=0.0)
     r_add.add_argument("--no-case", action="store_true", help="Do not auto-open a case")
+    r_add.add_argument("--within", type=int, default=None, dest="window_minutes", help="Windowed rule: fire when N matching events occur inside this many minutes")
+    r_add.add_argument("--count", type=int, default=None, dest="window_count", help="Windowed rule: event-count threshold inside the window (e.g. 5)")
     r_add.set_defaults(func=soc_commands.cmd_soc_rule_add)
     r_list = r_sub.add_parser("list", help="List detection rules", parents=[common])
     r_list.add_argument("--enabled-only", action="store_true")
@@ -775,6 +798,28 @@ def build_parser() -> argparse.ArgumentParser:
     a_serve.add_argument("--port", type=int, default=9090)
     a_serve.add_argument("--background", action="store_true", help="Run in a background thread")
     a_serve.set_defaults(func=api_commands.cmd_api_serve)
+
+    # SIEM auto-ingestion (syslog listener + file watch)
+    p_siem = sub.add_parser("siem", help="SIEM ingestion: syslog UDP listener + file watch -> SOC pipeline", parents=[common])
+    siem_sub = p_siem.add_subparsers(dest="siem_command", metavar="SIEM_COMMAND")
+    s_listen = siem_sub.add_parser("listen", help="Blocking UDP syslog-style listener", parents=[common])
+    s_listen.add_argument("--host", default="127.0.0.1")
+    s_listen.add_argument("--port", type=int, default=5514, help="UDP port to bind (default 5514)")
+    s_listen.add_argument("--source", default=None, help="Source label for ingested events (default: syslog)")
+    s_listen.add_argument("--run", type=int, default=0, help="Stop after N datagrams (0 = run forever)")
+    s_listen.add_argument("--dry-run", action="store_true", help="Parse only; do not ingest")
+    s_listen.set_defaults(func=siem_commands.cmd_siem_listen)
+    s_watch = siem_sub.add_parser("watch", help="Watch a log file (or directory) and ingest appended records", parents=[common])
+    s_watch.add_argument("path")
+    s_watch.add_argument("--source", default=None, help="Source label (default: filewatch)")
+    s_watch.add_argument("--poll", type=float, default=1.0, help="Poll interval in seconds")
+    s_watch.add_argument("--once", action="store_true", help="Ingest current contents and exit (bulk backfill)")
+    s_watch.add_argument("--dry-run", action="store_true", help="Parse only; do not ingest")
+    s_watch.set_defaults(func=siem_commands.cmd_siem_watch)
+    s_demo = siem_sub.add_parser("demo", help="Show supported log formats with sample records", parents=[common])
+    s_demo.add_argument("--source", default=None)
+    s_demo.add_argument("--ingest", action="store_true", help="Also push the samples through the SOC pipeline")
+    s_demo.set_defaults(func=siem_commands.cmd_siem_demo)
 
     return parser
 

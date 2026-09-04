@@ -205,6 +205,8 @@ def cmd_soc_rule_add(ctx: KsecContext, args) -> int:
             severity=args.severity,
             risk_boost=args.risk_boost or 0.0,
             open_case=not args.no_case,
+            window_minutes=args.window_minutes,
+            window_count=args.window_count,
         )
     except KSECError as exc:
         emit(exc.message, args.json, args.quiet)

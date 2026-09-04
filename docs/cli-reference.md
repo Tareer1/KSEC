@@ -45,13 +45,13 @@ ksec <group> <sub> --help
 | `case` | Cases | `create --title --severity`, `list`, `add-finding --case --finding`, `close <id>` |
 | `report` | Reporting | `create --engagement --title [--format markdown\|html] [--out]`, `list`, `show <id>` |
 | `learn` | Learning curriculum | `list`, `lesson --id`, `complete --id --user`, `progress --user` |
-| `dfir` | Digital forensics / IR | `artifact add|list`, `event add`, `timeline [--case]` |
+| `dfir` | Digital forensics / IR | `artifact add|list|hash <id> --path`, `event add`, `timeline [--case]`, `export --case [--format csv\|jsonl] [--out]` |
 | `intel` | Threat intelligence | `ioc add|list|correlate|enrich|extract`, `actor add|list`, `campaign add|list`, `ttp add|list`, `link` |
-| `plugin` | Plugin lifecycle | `list`, `info <name>`, `install <path> --trust`, `enable\|disable\|block <name>`, `uninstall`, `check` |
+| `plugin` | Plugin lifecycle | `list`, `info <name>`, `new <name> [--capability --tool --category --safety --trust]`, `install <path> --trust`, `enable\|disable\|block <name>`, `uninstall`, `check` |
 | `adversary` | Adversary simulation | `profile add|list|show|delete`, `coverage [--profile]`, `exercise new|list|run|chain [--dry-run]`, `report <id>` (kill-chain order + phase coverage) |
 | `vuln` | Authorized deterministic vuln checks | `checks`, `check <target> [--port] --engagement --user` |
 | `atomic` | Atomic red tests (detection validation) | `list`, `info <id>`, `run <id> <target> --engagement --user` |
-| `soc` | SOC alert pipeline | `ingest`, `event list`, `alert list|show|action ack\|resolve\|close`, `rule add|list|enable|disable|delete` |
+| `soc` | SOC alert pipeline | `ingest`, `event list`, `alert list|show|action ack\|resolve\|close`, `rule add [--within M --count N]|list|enable|disable|delete` |
 | `notify` | Notifications | `list [--limit]`, `test [--title --body]` |
 | `update` | Update readiness | `check` |
 | `backup` | Backup / restore | `create`, `list`, `verify <id>`, `restore <id> --yes` |
@@ -60,6 +60,7 @@ ksec <group> <sub> --help
 | `ask` | In-tool mentor: answer anything in plain language | `ask "<question>"`, `--list` (all topics) |
 | `role` | Role playbook shortcut | `red \| blue \| purple \| learner` |
 | `api` | REST API (bearer tokens + server) | `token create --name --user`, `token list`, `token revoke <id>`, `serve --host --port` |
+| `siem` | SIEM auto-ingestion (logs -> SOC pipeline) | `listen --host --port [--run]`, `watch <path> [--once]`, `demo [--ingest]` |
 
 ## In-tool mentor (`ksec ask` / `ksec role`)
 
@@ -96,10 +97,26 @@ ksec report create --engagement 1 --title "Eng 1 report" --out report.md
 # SOC
 ksec soc rule add --name c2-beacon --event-type beacon --field domain \
     --operator contains --value .top --severity critical
+ksec soc rule add --name ssh-brute --event-type auth_failure --field ip \
+    --operator eq --value 203.0.113.66 --within 5 --count 5 --severity high  # windowed
 ksec soc ingest --event-id ev-9 --source endpoint --event-type beacon \
     --severity medium --domain evil-c2.top
 ksec soc alert list
 ksec soc alert action ack 1
+
+# SIEM auto-ingestion: real log streams into the same pipeline
+ksec siem listen --port 5514          # UDP syslog (rsyslog: *.* @127.0.0.1:5514)
+ksec siem watch /var/log/auth.log     # appended lines -> events
+ksec siem watch /var/log --once       # bulk backfill
+ksec siem demo --ingest               # see all supported formats
+
+# DFIR forensics
+ksec dfir artifact add --case 1 --type file --name dump.bin
+ksec dfir artifact hash 1 --path /evidence/dump.bin    # SHA-256/SHA-1 recorded
+ksec dfir export --case 1 --format jsonl --out case1.jsonl
+
+# Interactive dashboard triage
+ksec dashboard start --port 8080      # http://127.0.0.1:8080/soc — ack/resolve/close
 ```
 
 ## JSON output

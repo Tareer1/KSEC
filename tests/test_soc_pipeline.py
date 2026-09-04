@@ -309,7 +309,8 @@ class SocCliTest(KsecTestCase):
         args = SimpleNamespace(
             name="cli-rule", description=None, event_type=None, field="ip",
             operator="eq", value="1.2.3.4", severity="high", risk_boost=None,
-            no_case=False, json=True, quiet=False,
+            no_case=False, window_minutes=None, window_count=None,
+            json=True, quiet=False,
         )
         buffer = io.StringIO()
         with redirect_stdout(buffer):
@@ -341,6 +342,89 @@ class SocCliTest(KsecTestCase):
             )
         self.assertEqual(code, 0)
         self.assertEqual(json.loads(buffer.getvalue()), [])
+
+
+class WindowedRuleTest(KsecTestCase):
+    """Windowed (count-in-window) detection rules."""
+
+    def setUp(self):
+        super().setUp()
+        self.ctx = self.make_context()
+
+    def tearDown(self):
+        self.ctx.close()
+        super().tearDown()
+
+    def test_windowed_rule_fires_on_crossing_event_once(self):
+        self.ctx.soc_rules.create(
+            "brute-3-in-10",
+            event_type="auth_failure",
+            field="ip",
+            operator="eq",
+            value="10.0.0.9",
+            severity="high",
+            risk_boost=2.0,
+            window_minutes=10,
+            window_count=3,
+        )
+        for i in range(3):
+            report = self.ctx.soc.ingest(
+                {"event_id": f"bf-{i}", "source": "ssh",
+                 "event_type": "auth_failure", "severity": "medium",
+                 "ip": "10.0.0.9", "username": "root"}
+            )
+            matched = [m["name"] for m in report["rules_matched"]]
+            if i < 2:
+                self.assertNotIn("brute-3-in-10", matched)
+            else:
+                self.assertIn("brute-3-in-10", matched)
+                self.assertTrue(report["alerted"])
+        # Fourth event does not re-fire (once per burst).
+        report = self.ctx.soc.ingest(
+            {"event_id": "bf-3", "source": "ssh",
+             "event_type": "auth_failure", "severity": "medium",
+             "ip": "10.0.0.9", "username": "root"}
+        )
+        self.assertNotIn("brute-3-in-10", [m["name"] for m in report["rules_matched"]])
+        self.assertEqual(self.ctx.soc_alerts.count(), 1)
+
+    def test_windowed_rule_ignores_other_values(self):
+        self.ctx.soc_rules.create(
+            "single-ip-burst",
+            event_type="auth_failure",
+            field="ip",
+            operator="eq",
+            value="10.0.0.77",
+            severity="high",
+            window_minutes=10,
+            window_count=2,
+        )
+        # Bursts from OTHER IPs must not count toward this rule.
+        for i in range(4):
+            self.ctx.soc.ingest(
+                {"event_id": f"other-{i}", "event_type": "auth_failure",
+                 "severity": "medium", "ip": "10.0.0.99", "username": "root"}
+            )
+        self.assertEqual(self.ctx.soc_alerts.count(), 0)
+
+    def test_windowed_requires_valid_params(self):
+        from ksec.core.errors import KSECError
+
+        with self.assertRaises(KSECError):
+            self.ctx.soc_rules.create(
+                "bad-window", window_minutes=5, window_count=1  # count >= 2
+            )
+        with self.assertRaises(KSECError):
+            self.ctx.soc_rules.create(
+                "bad-op", operator="regex", value=".*",
+                window_minutes=5, window_count=3  # regex not windowable
+            )
+
+    def test_plain_rules_unaffected_by_window_column(self):
+        rule = self.ctx.soc_rules.create("plain", field="ip", operator="eq", value="1.1.1.1")
+        self.assertFalse(rule.windowed)
+        self.assertIsNone(rule.window_minutes)
+        self.assertIsNone(rule.window_count)
 
 
 if __name__ == "__main__":

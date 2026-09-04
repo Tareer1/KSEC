@@ -5,6 +5,34 @@ All notable changes are tracked here. Format follows
 
 ## Unreleased — real-use power round
 
+### Added — SOC intake & forensics round
+
+- **SIEM auto-ingestion** (`ksec siem`, spec: real SOC intake): UDP
+  syslog-style listener (`listen`) and file/directory watcher (`watch`) that
+  parse RFC3164 syslog, JSONL and auditd key=value records into the SOC
+  pipeline. Parsed events carry deterministic ids so re-sent bursts dedupe;
+  IPs/domains inside message text are extracted by the normalizer so
+  syslog lines enrich/correlate like any other event (`siem demo` shows all
+  formats).
+- **Windowed detection rules** (migration `011`): `soc rule add ...
+  --within <minutes> --count <N>` — count-based rules fire exactly once when
+  the incoming event crosses the threshold inside the window (e.g. 5
+  auth_failures from one IP in 5 minutes = brute-force alert). Windowed
+  evaluation is SQL over stored events; supported operators eq/contains/
+  min_severity; `window_count`/`window_minutes` columns.
+- **Interactive dashboard**: SOC triage views (alerts/cases) with
+  ack/resolve/close buttons (`/api/v1/alerts`, `/api/v1/cases` +
+  POST actions); every write is audited with actor `dashboard`. Read-only
+  overview now reports alert/case counts.
+- **Plugin scaffold** (`ksec plugin new`): generates a ready-to-fill plugin
+  (manifest.json + adapter.py + parser.py + README) with normalized
+  underscore capabilities; scaffolded plugins pass `plugin check`.
+- **DFIR forensics extras**: `dfir artifact hash` records SHA-256/SHA-1 +
+  size of a collected file on the artifact (audited); `dfir export` writes
+  the merged artifact+event chronology as CSV or JSONL.
+- Knowledge base grew to 43 topics (siem, windowed-rules, api, schedules,
+  dashboard + refreshed dfir/plugins/learner cards).
+
 ### Added
 
 - Real offensive arsenal: five production Kali integrations wired through
@@ -47,7 +75,7 @@ All notable changes are tracked here. Format follows
   through the same services, policy and audit trail as the CLI
 - Confirmed AI-free: `dependencies = []`, offline mentor is a
   deterministic keyword router — no LLM/cloud anywhere
-- 346 unit tests + 189-step CLI smoke suite
+- 378 unit tests + 201-step CLI smoke suite (updated with this round)
 
 ## [0.2.0] - 2026-09-04
 

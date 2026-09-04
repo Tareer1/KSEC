@@ -1,4 +1,4 @@
-"""CLI: ``ksec plugin list|info|install|enable|disable|uninstall|check``.
+"""CLI: ``ksec plugin list|info|new|install|enable|disable|uninstall|check``.
 
 Plugin lifecycle per spec 06#43-45 (source verification, permission
 declaration, trust levels, user approval) and 10 (plugin inventory/health).
@@ -12,6 +12,7 @@ from ksec.cli.output import emit
 from ksec.core.errors import KSECError
 from ksec.identity.users import UserRepository
 from ksec.plugins.manager import STATUS_BLOCKED, STATUS_DISABLED, STATUS_ENABLED
+from ksec.plugins.scaffold import scaffold_plugin
 
 
 def _require_admin(ctx: KsecContext, args) -> None:
@@ -22,6 +23,40 @@ def _require_admin(ctx: KsecContext, args) -> None:
     decision = ctx.policy.evaluate(user=user, action="plugin.manage")
     if decision.decision.value != "ALLOW":
         raise KSECError(f"authorization denied: {decision.reason}")
+
+
+def cmd_plugin_new(ctx: KsecContext, args) -> int:
+    """Scaffold a new plugin directory (manifest + adapter + parser)."""
+    try:
+        path = scaffold_plugin(
+            args.name,
+            target_dir=Path(args.path or ".").resolve(),
+            capability=args.capability or "",
+            tool=args.tool or "",
+            category=args.category,
+            description=args.description or "",
+            author=args.author or "",
+            safety=args.safety,
+            trust_level=args.trust,
+        )
+    except KSECError as exc:
+        emit({"error": exc.message}, args.json, args.quiet)
+        return 1
+    emit(
+        {
+            "created": True,
+            "plugin_id": path.name,
+            "path": str(path),
+            "next": [
+                f"edit {path / 'adapter.py'} (implement the tool call)",
+                f"edit {path / 'manifest.json'} (name, description, tool)",
+                f"ksec plugin install {path} --trust {args.trust} --user <admin> --password <pass> --yes",
+            ],
+        },
+        args.json,
+        args.quiet,
+    )
+    return 0
 
 
 def cmd_plugin_list(ctx: KsecContext, args) -> int:

@@ -459,6 +459,11 @@ python3 -m ksec dfir event add --case 1 \
 
 # Chronological incident timeline
 python3 -m ksec dfir timeline --case 1 [--event-type login]
+
+# Forensics extras: hash a collected file and export the chronology
+python3 -m ksec dfir artifact hash 1 --path /evidence/auth.log.bin
+python3 -m ksec dfir export --case 1 --format jsonl --out case-1.jsonl
+python3 -m ksec dfir export --case 1 --format csv
 ```
 
 Artifact types: `file`, `log`, `process`, `network`, `auth`, `browser`,
@@ -576,6 +581,39 @@ python3 -m ksec soc rule enable 1 | disable 1 | delete 1
 Rules compare one normalized field (`ip`, `domain`, `host`, `username`,
 `process`, `source`, `event_type`, `severity`, `details`) with an operator:
 `eq`, `ne`, `contains`, `regex`, or `min_severity`.
+
+**Windowed rules** detect bursts — e.g. 5 failed logins from one IP in 5
+minutes. Add `--within <minutes> --count <N>`; the rule fires exactly once,
+when the incoming event crosses the threshold inside the window (no alert
+flood), and only for values matching the filter:
+
+```bash
+python3 -m ksec soc rule add --name ssh-brute --event-type auth_failure \
+    --field ip --operator eq --value 203.0.113.66 --within 5 --count 5 \
+    --severity high
+```
+
+### Auto-ingestion (`ksec siem`) — real log streams
+
+Instead of typing events one by one, `ksec siem` connects live log streams
+to the same pipeline:
+
+```bash
+# UDP syslog listener (point rsyslog at it: *.* @127.0.0.1:5514)
+python3 -m ksec siem listen --port 5514 --source syslog
+
+# Watch a growing log file (or a whole directory of logs)
+python3 -m ksec siem watch /var/log/auth.log
+python3 -m ksec siem watch /var/log --once        # bulk backfill, then exit
+
+# See every supported format (JSONL / RFC3164 syslog / auditd key=value)
+python3 -m ksec siem demo --ingest
+```
+
+Records are parsed, get deterministic ids (re-sending a burst after a
+restart dedupes), and IPs/domains inside the message body are extracted — so
+a raw `Failed password ... from 203.0.113.66` line enriches, correlates and
+matches rules exactly like a manually typed event.
 
 ### Alerts and cases
 
@@ -707,20 +745,28 @@ The TUI is **mode-aware** (spec: THREE OPERATION MODES):
 
 ```bash
 python3 -m ksec dashboard start --host 127.0.0.1 --port 8080
-# open http://127.0.0.1:8080/
+# open http://127.0.0.1:8080/          (overview)
+# open http://127.0.0.1:8080/soc       (SOC triage: alert buttons)
+# open http://127.0.0.1:8080/cases     (cases)
 ```
 
-Read-only API endpoints served over HTTP (stdlib):
+The dashboard is **interactive SOC triage**: overview (status counts),
+alerts (ack / resolve / close buttons per alert) and cases (close). Every
+write is recorded in the audit log with actor `dashboard`. JSON endpoints
+served over HTTP (stdlib):
 
-- `/` — minimal HTML page
-- `/api/v1/status` — platform status
-- `/api/v1/jobs` — recent jobs
-- `/api/v1/findings` — recent findings
-- `/api/v1/engagements` — engagements
-- `/api/v1/assets` — assets
+- `/` `/soc` `/cases` — HTML pages
+- `/api/v1/status` — platform status (+ alert/case counts)
+- `/api/v1/alerts?limit=50&status=open` — alerts
+- `/api/v1/cases` — cases
+- `/api/v1/jobs`, `/api/v1/findings`, `/api/v1/engagements`, `/api/v1/assets`
+- `POST /api/v1/alerts/<id>/action/<ack|resolve|close>`
+- `POST /api/v1/cases/<id>/close`
 
 The dashboard uses the same core services as the CLI — it cannot bypass
-authorization or scope. Use `--background` to run it in a thread.
+authorization or scope. Because it offers write buttons, keep it bound to
+`127.0.0.1`; use `ksec api` (bearer tokens) for anything reachable by other
+machines. Use `--background` to run it in a thread.
 
 ### REST API (`ksec api`) — for scripts / SIEM integration
 
@@ -810,6 +856,11 @@ demonstrates the full layout.
 ksec plugin list                 # installed + bundled plugins
 ksec plugin info http_headers    # manifest, trust, permissions, status
 ksec plugin check                # validate every plugin (manifest/hash/health)
+
+# Scaffold a new plugin: valid manifest + adapter + parser skeleton
+ksec plugin new http-headers --tool curl --category web \
+    --safety ACTIVE_SAFE --trust LOCAL --path ./plugins
+#   -> edit ./plugins/http-headers/adapter.py + manifest.json, then install
 ```
 
 **Installing a user plugin** (requires `plugin.manage` permission):

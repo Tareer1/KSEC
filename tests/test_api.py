@@ -62,7 +62,7 @@ class ApiTest(KsecTestCase):
     def test_status_endpoint(self):
         status, body = _request("GET", f"{self.base}/api/v1/status", token=self._token())
         self.assertEqual(status, 200)
-        self.assertEqual(body["db_version"], 10)
+        self.assertEqual(body["db_version"], 11)
 
     def test_list_endpoints(self):
         token = self._token()

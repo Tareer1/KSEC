@@ -36,7 +36,7 @@ Implemented so far (spec Stages 1–9 core, interfaces included):
 - [x] Repository skeleton + GitHub-ready files (SECURITY, CONTRIBUTING, CI, templates)
 - [x] Configuration loading (TOML, precedence, `KSEC_HOME` / `KSEC_CONFIG`)
 - [x] Structured, secret-redacting logging
-- [x] SQLite database with sequential migrations (`001`–`008`)
+- [x] SQLite database with sequential migrations (`001`–`011`)
 - [x] Identity: users + scrypt password hashing
 - [x] RBAC: workspaces, roles, permissions (seeded)
 - [x] Sessions (5-workspace model)
@@ -81,11 +81,16 @@ Implemented so far (spec Stages 1–9 core, interfaces included):
 - [x] Report **executive summary**: auto severity counts + top-risk findings + recommended next step at the top of every Markdown/HTML report
 - [x] SOC triage actor audit: `soc alert action ack/resolve/close` and `case close` accept `--user`, recording who acted in the audit log
 - [x] **REST API** (`ksec api`): SHA-256-hashed revocable bearer tokens + stdlib JSON server — reads (status/jobs/assets/findings/alerts/cases/engagements/sessions/iocs/tools/audit) and writes (SOC ingest, alert/case actions, scope-checked capability runs) all behind the same policy + audit as the CLI
+- [x] **SIEM auto-ingestion** (`ksec siem`): UDP syslog-style listener + file/directory watcher — parses RFC3164 syslog, JSONL and auditd key=value records and pushes every line through the normal SOC pipeline with deterministic dedup (`ksec siem listen|watch|demo`)
+- [x] **Windowed detection rules**: `ksec soc rule add ... --within <minutes> --count <N>` fires once when N matching events occur inside the window (brute-force detection) — migration `011`
+- [x] **Interactive SOC dashboard**: alert ack/resolve/close + case close from the browser (`ksec dashboard start`), audited as actor `dashboard`
+- [x] **Plugin scaffold** (`ksec plugin new`): generates a valid manifest + adapter + parser skeleton with normalized capabilities
+- [x] **DFIR forensics extras**: `dfir artifact hash` (SHA-256/SHA-1 of a collected file) + `dfir export` (chronology as CSV/JSONL)
 - [x] **100% AI-free**: zero dependencies (`dependencies = []`), fully offline — the `ksec ask` mentor is a deterministic keyword router over curated topics, no LLM/cloud of any kind
 - [x] CLI: `init status doctor version config env tools session engagement
       assess job asset finding evidence case report learn workflow dfir intel
-      plugin adversary vuln atomic soc run backup tui dashboard ask role api`
-- [x] 346 unit tests (stdlib unittest, no dependencies) + 190-step CLI smoke suite
+      plugin adversary vuln atomic soc siem run backup tui dashboard ask role api`
+- [x] 378 unit tests (stdlib unittest, no dependencies) + 201-step CLI smoke suite
   (`python3 -m unittest discover -s tests` / `bash scripts/smoke.sh`)
 - [x] v0.2.0 — changelog in `CHANGELOG.md`; docs in [`docs/`](docs/README.md)
 

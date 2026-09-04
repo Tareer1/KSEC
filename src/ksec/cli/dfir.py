@@ -1,5 +1,9 @@
-"""CLI: ``ksec dfir artifact|event|timeline`` — forensic artifacts and timeline."""
+"""CLI: ``ksec dfir artifact|event|timeline|export`` — forensics."""
 from __future__ import annotations
+
+import csv
+import io
+import json
 
 from ksec.bootstrap import KsecContext
 from ksec.cli.output import emit
@@ -117,4 +121,55 @@ def cmd_timeline(ctx: KsecContext, args) -> int:
             print("empty timeline")
         for d in data:
             print(f"{d['event_time']}  {d['event_type']:<14} actor={d['actor']:<16} {d['details']}")
+    return 0
+
+
+def cmd_artifact_hash(ctx: KsecContext, args) -> int:
+    """Record SHA-256/SHA-1 hashes of a collected file on an artifact."""
+    try:
+        result = ctx.dfir.hash_artifact(args.id, args.path)
+    except ValueError as exc:
+        emit(str(exc), args.json, args.quiet)
+        return 1
+    emit(result, args.json, args.quiet)
+    return 0
+
+
+def cmd_export(ctx: KsecContext, args) -> int:
+    """Export a case chronology (artifacts + timeline) as CSV or JSONL."""
+    case = ctx.db.query_one("SELECT id FROM cases WHERE id = ?", (args.case,))
+    if case is None:
+        emit(f"unknown case: {args.case}", args.json, args.quiet)
+        return 1
+    rows = ctx.dfir.chronology(case_id=args.case)
+    fmt = (args.format or "csv").lower()
+
+    if fmt == "jsonl":
+        lines = [json.dumps(r, default=str) + "\n" for r in rows]
+        text = "".join(lines)
+    else:
+        buffer = io.StringIO()
+        writer = csv.DictWriter(
+            buffer,
+            fieldnames=["kind", "time", "event_type", "name", "actor", "source", "details", "ref_id"],
+            lineterminator="\n",
+        )
+        writer.writeheader()
+        for row in rows:
+            writer.writerow(row)
+        text = buffer.getvalue()
+
+    if args.out:
+        with open(args.out, "w", encoding="utf-8") as handle:
+            handle.write(text)
+        emit({"exported": True, "rows": len(rows), "format": fmt, "out": args.out},
+             args.json, args.quiet)
+    else:
+        if args.json:
+            emit(rows, True, False)
+        elif args.quiet:
+            for r in rows:
+                print(r["time"])
+        else:
+            print(text, end="")
     return 0

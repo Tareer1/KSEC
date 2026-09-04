@@ -14,6 +14,7 @@ from ksec.cli import admin as admin_commands
 from ksec.cli import adversary as adversary_commands
 from ksec.cli import audit as audit_commands
 from ksec.cli import assess as assess_commands
+from ksec.cli import atomic as atomic_commands
 from ksec.cli import backup as backup_commands
 from ksec.cli import core as core_commands
 from ksec.cli import data as data_commands
@@ -28,6 +29,7 @@ from ksec.cli import notify as notify_commands
 from ksec.cli import plugin as plugin_commands
 from ksec.cli import report as report_commands
 from ksec.cli import update as update_commands
+from ksec.cli import vuln as vuln_commands
 from ksec.cli import session as session_commands
 from ksec.cli import soc as soc_commands
 from ksec.cli import tools as tools_commands
@@ -518,6 +520,16 @@ def build_parser() -> argparse.ArgumentParser:
     ex_run.add_argument("--workspace", default="ADVERSARY_SIMULATION", choices=["RED_TEAM", "BLUE_TEAM", "RESEARCH_OSINT", "ADVERSARY_SIMULATION", "LEARN_WORK"])
     ex_run.add_argument("--dry-run", action="store_true", help="Policy-check without executing")
     ex_run.set_defaults(func=adversary_commands.cmd_adv_exercise_run)
+    ex_chain = ex_sub.add_parser("chain", help="Run an exercise in ATT&CK kill-chain order", parents=[common])
+    ex_chain.add_argument("id", type=int)
+    ex_chain.add_argument("target")
+    ex_chain.add_argument("--engagement", type=int, default=None)
+    ex_chain.add_argument("--user", required=True)
+    ex_chain.add_argument("--password", default=None)
+    ex_chain.add_argument("--role", default=None)
+    ex_chain.add_argument("--workspace", default="ADVERSARY_SIMULATION", choices=["RED_TEAM", "BLUE_TEAM", "RESEARCH_OSINT", "ADVERSARY_SIMULATION", "LEARN_WORK"])
+    ex_chain.add_argument("--dry-run", action="store_true", help="Policy-check without executing")
+    ex_chain.set_defaults(func=adversary_commands.cmd_adv_chain)
     adv_rep = adv_sub.add_parser("report", help="Exercise report (technique coverage)", parents=[common])
     adv_rep.add_argument("id", type=int)
     adv_rep.set_defaults(func=adversary_commands.cmd_adv_report)
@@ -527,6 +539,19 @@ def build_parser() -> argparse.ArgumentParser:
     u_sub = p_update.add_subparsers(dest="update_command", metavar="UPDATE_COMMAND")
     u_check = u_sub.add_parser("check", help="Check version/migrations/rollback readiness", parents=[common])
     u_check.set_defaults(func=update_commands.cmd_update_check)
+
+    # vulnerability checks (authorized, deterministic)
+    p_vuln = sub.add_parser("vuln", help="Authorized deterministic vuln checks (TLS, headers, banners)", parents=[common])
+    v_sub = p_vuln.add_subparsers(dest="vuln_command", metavar="VULN_COMMAND")
+    v_list = v_sub.add_parser("checks", help="List available checks", parents=[common])
+    v_list.set_defaults(func=vuln_commands.cmd_vuln_checks)
+    v_check = v_sub.add_parser("check", help="Run checks against an in-scope target", parents=[common])
+    v_check.add_argument("target")
+    v_check.add_argument("--engagement", type=int, default=None)
+    v_check.add_argument("--port", type=int, default=None, help="Override port (default: 80/443 by scheme)")
+    v_check.add_argument("--user", required=True)
+    v_check.add_argument("--password", default=None)
+    v_check.set_defaults(func=vuln_commands.cmd_vuln_check)
 
     # notifications
     p_notify = sub.add_parser("notify", help="Notification store + provider test", parents=[common])
@@ -604,6 +629,24 @@ def build_parser() -> argparse.ArgumentParser:
     r_del = r_sub.add_parser("delete", help="Delete a rule", parents=[common])
     r_del.add_argument("id", type=int)
     r_del.set_defaults(func=soc_commands.cmd_soc_rule_delete)
+
+    # atomic red tests (detection validation)
+    p_atomic = sub.add_parser("atomic", help="Atomic red tests for detection validation", parents=[common])
+    at_sub = p_atomic.add_subparsers(dest="atomic_command", metavar="ATOMIC_COMMAND")
+    at_list = at_sub.add_parser("list", help="List atomic tests", parents=[common])
+    at_list.set_defaults(func=atomic_commands.cmd_atomic_list)
+    at_info = at_sub.add_parser("info", help="Show an atomic test", parents=[common])
+    at_info.add_argument("id")
+    at_info.set_defaults(func=atomic_commands.cmd_atomic_info)
+    at_run = at_sub.add_parser("run", help="Run an atomic test against an in-scope target", parents=[common])
+    at_run.add_argument("id")
+    at_run.add_argument("target")
+    at_run.add_argument("--engagement", type=int, default=None)
+    at_run.add_argument("--user", required=True)
+    at_run.add_argument("--password", default=None)
+    at_run.add_argument("--role", default=None)
+    at_run.add_argument("--workspace", default="ADVERSARY_SIMULATION", choices=["RED_TEAM", "BLUE_TEAM", "RESEARCH_OSINT", "ADVERSARY_SIMULATION", "LEARN_WORK"])
+    at_run.set_defaults(func=atomic_commands.cmd_atomic_run)
 
     # alias: ksec run NAME TARGET (spec example)
     p_run = sub.add_parser("run", help="Alias for workflow run", parents=[common])

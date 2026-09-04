@@ -48,7 +48,9 @@ ksec <group> <sub> --help
 | `dfir` | Digital forensics / IR | `artifact add|list`, `event add`, `timeline [--case]` |
 | `intel` | Threat intelligence | `ioc add|list|correlate|enrich|extract`, `actor add|list`, `campaign add|list`, `ttp add|list`, `link` |
 | `plugin` | Plugin lifecycle | `list`, `info <name>`, `install <path> --trust`, `enable\|disable\|block <name>`, `uninstall`, `check` |
-| `adversary` | Adversary simulation | `profile add|list|show|delete`, `coverage [--profile]`, `exercise new|list|run [--dry-run]`, `report <id>` |
+| `adversary` | Adversary simulation | `profile add|list|show|delete`, `coverage [--profile]`, `exercise new|list|run|chain [--dry-run]`, `report <id>` (kill-chain order + phase coverage) |
+| `vuln` | Authorized deterministic vuln checks | `checks`, `check <target> [--port] --engagement --user` |
+| `atomic` | Atomic red tests (detection validation) | `list`, `info <id>`, `run <id> <target> --engagement --user` |
 | `soc` | SOC alert pipeline | `ingest`, `event list`, `alert list|show|action ack\|resolve\|close`, `rule add|list|enable|disable|delete` |
 | `notify` | Notifications | `list [--limit]`, `test [--title --body]` |
 | `update` | Update readiness | `check` |

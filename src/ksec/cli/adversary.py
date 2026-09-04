@@ -172,6 +172,35 @@ def cmd_adv_exercise_run(ctx: KsecContext, args) -> int:
     return 0 if result["status"] not in ("failed",) else 1
 
 
+def cmd_adv_chain(ctx: KsecContext, args) -> int:
+    """Run an exercise in ATT&CK kill-chain order (phase by phase)."""
+    user = _auth(ctx, args)
+    if user is None:
+        return 1
+    session = _session_for(ctx, user, args)
+    try:
+        result = ctx.adversary.plan_exercise(
+            args.id,
+            user=user,
+            target=args.target,
+            engagement_id=args.engagement,
+            policy=ctx.policy,
+            dry_run=args.dry_run,
+            scheduler=ctx.scheduler if not args.dry_run else None,
+            session=session,
+            chain=True,
+        )
+    except ValueError as exc:
+        emit(str(exc), args.json, args.quiet)
+        return 1
+    if args.quiet and not args.json:
+        for o in result["steps"]:
+            print(f"{o['phase']:<18} {o['technique_id'] or '-':<12} {o['policy_decision']:<10} {o['state']}")
+        return 0 if result["status"] != "failed" else 1
+    emit(result, args.json, args.quiet)
+    return 0 if result["status"] not in ("failed",) else 1
+
+
 def cmd_adv_exercise_list(ctx: KsecContext, args) -> int:
     rows = ctx.adversary.list_exercises()
     data = [dict(r) for r in rows]

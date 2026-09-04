@@ -36,7 +36,9 @@ This guide covers **every implemented command**. Run
 22. [Adversary simulation](#22-adversary-simulation)
 23. [Notifications](#23-notifications)
 24. [Updates](#24-updates)
-25. [Tips and troubleshooting](#25-tips-and-troubleshooting)
+25. [Vulnerability checks](#25-vulnerability-checks)
+26. [Atomic red tests](#26-atomic-red-tests)
+27. [Tips and troubleshooting](#27-tips-and-troubleshooting)
 
 ---
 
@@ -856,7 +858,49 @@ plugin status, and rollback readiness (a backup must exist and match before
 an update is considered safe). Pairs with `ksec backup` (section 14): run a
 backup first, then `ksec update check` shows rollback-ready.
 
-## 25. Tips and troubleshooting
+## 25. Vulnerability checks
+
+`ksec vuln` runs **deterministic, read-only checks** against an
+in-scope target (TLS version, HTTP security headers, server-banner
+disclosure, dev-server fingerprints) and records each positive result as a
+finding with a risk score. It never exploits anything — it probes version
+and configuration, then leaves analysis to the operator.
+
+```bash
+python3 -m ksec vuln checks                     # available checks
+python3 -m ksec vuln check example.com \
+    --engagement 1 --user admin --password '...'        # https/443 default
+python3 -m ksec vuln check 127.0.0.1 --port 8000 \
+    --engagement 1 --user admin --password '...'        # plain http
+```
+
+Out-of-scope targets are refused with `authorization denied`. Re-running a
+check never duplicates findings (same title+engagement = skipped).
+
+## 26. Atomic red tests
+
+`ksec atomic` is a small Atomic-Red-Team-style library for **detection
+validation**: one technique per test, executed with regular KSEC
+capabilities so every run is policy-gated, scheduled and audited. After a
+run, check whether your SOC/analytics noticed (each atomic prints its
+`detection` hint).
+
+```bash
+python3 -m ksec atomic list
+python3 -m ksec atomic info net-dns-lookup
+python3 -m ksec atomic run net-port-scan example.com \
+    --engagement 1 --user admin --password '...'
+```
+
+Techniques include DNS recon (T1590), port scan (T1046), HTTP C2-channel
+probe (T1071.001), web recon (T1190) and service-banner grab (T1082).
+
+The kill-chain companion: `ksec adversary exercise chain <id> <target>`
+runs an exercise ordered by ATT&CK tactic phases
+(reconnaissance → discovery → … → command-and-control) instead of stored
+position, and `ksec adversary report <id>` shows per-phase coverage.
+
+## 27. Tips and troubleshooting
 
 **"Target not authorized for ..." / REQUIRE_AUTHORIZATION**
 The target is outside every engagement scope rule. Add an allow rule

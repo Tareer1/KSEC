@@ -71,10 +71,14 @@ Implemented so far (spec Stages 1–9 core, interfaces included):
 - [x] Notification providers: email / telegram / slack / discord / webhook (`ksec notify`, config `[notifications.providers]`)
 - [x] SOC alerts notify event-driven through configured providers
 - [x] Offline update-readiness check: version, migrations, plugins, rollback gating (`ksec update check`)
+- [x] Authorized vuln checks: deterministic TLS/header/banner probes → auto findings (`ksec vuln check`)
+- [x] Atomic red tests for detection validation (`ksec atomic list|info|run`)
+- [x] Adversary kill-chain execution (ATT&CK tactic order) + per-phase coverage reports (`ksec adversary exercise chain`)
+- [x] Kali tool integrations: nmap, dig, curl + **sslscan, gobuster, nikto** (adapters+parsers+install mapping)
 - [x] CLI: `init status doctor version config env tools session engagement
       assess job asset finding evidence case report learn backup tui dashboard
-      admin user audit plugin intel dfir soc workflow adversary update notify run`
-- [x] 266 unit tests (stdlib unittest, no dependencies) + 156-step CLI smoke suite
+      admin user audit plugin intel dfir soc workflow adversary vuln atomic update notify run`
+- [x] 286 unit tests (stdlib unittest, no dependencies) + 164-step CLI smoke suite
   (`python3 -m unittest discover -s tests` / `bash scripts/smoke.sh`)
 - [x] v0.2.0 — changelog in `CHANGELOG.md`; docs in [`docs/`](docs/README.md)
 

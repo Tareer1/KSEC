@@ -33,7 +33,17 @@ All notable changes are tracked here. Format follows
   single-step workflow, e.g. `ksec run http_headers example.com`
 - URL / host:port targets normalize to their host for scope matching
   (`https://example.com` matches a scope rule for `example.com`)
-- 266 unit tests
+- Fix: parser registry resolved tool aliases but not parser names, so nmap
+  jobs silently produced 0 entities; registry now resolves both
+- Authorized vulnerability checks (`ksec vuln check`): deterministic
+  read-only TLS/HTTP-header/banner probes -> auto findings with risk scores
+- Atomic red tests (`ksec atomic`): one-technique detection-validation
+  library (T1590/T1046/T1071.001/T1190/T1082), policy-gated + audited
+- Adversary kill-chain (`adversary exercise chain`): executes profile steps
+  in ATT&CK tactic order; reports gain per-phase technique coverage
+- New tool integrations: sslscan (`tls_scan`), nikto (`web_vuln_scan`),
+  gobuster (`directory_brute`) adapters + parsers + install mapping
+- 286 unit tests + 164-step CLI smoke suite
 
 ## [0.1.0] - 2026-09-04
 

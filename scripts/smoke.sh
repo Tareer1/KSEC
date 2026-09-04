@@ -227,6 +227,13 @@ run_ok "plugin list"     "${BIN[@]}" plugin list
 run_ok "plugin info"     "${BIN[@]}" plugin info ksec.http-headers
 run_ok "plugin check"    "${BIN[@]}" plugin check
 
+say "14b. vuln checks + atomics"
+run_ok "vuln checks list" "${BIN[@]}" vuln checks
+run_ok "atomic list"      "${BIN[@]}" atomic list
+run_ok "atomic info"      "${BIN[@]}" atomic info net-dns-lookup
+expect_fail "vuln out-of-scope" "${BIN[@]}" vuln check 203.0.113.44 --engagement 1 --user "$ADMIN" --password "$APW"
+expect_fail "atomic out-of-scope" "${BIN[@]}" atomic run net-dns-lookup 203.0.113.44 --engagement 1 --user "$ADMIN" --password "$APW"
+
 say "15. adversary simulation"
 run_ok "adv profile add"  "${BIN[@]}" adversary profile add --name apt-smoke --threat-actor APT-Smoke --technique T1046 --technique T1071 --user "$ADMIN"
 run_ok "adv profile list" "${BIN[@]}" adversary profile list
@@ -236,6 +243,7 @@ run_ok "adv exercise new" "${BIN[@]}" adversary exercise new --name ex-smoke --p
 run_ok "adv exercise list" "${BIN[@]}" adversary exercise list
 run_ok "adv exercise dry-run" "${BIN[@]}" adversary exercise run 1 example.com --engagement 1 --user "$ADMIN" --password "$APW" --dry-run
 run_grep "adv exercise blocks out-of-scope" "REQUIRE_AUTHORIZATION" "${BIN[@]}" adversary exercise run 1 203.0.113.200 --engagement 1 --user "$ADMIN" --password "$APW" --dry-run
+run_ok "adv chain dry-run" "${BIN[@]}" adversary exercise chain 1 example.com --engagement 1 --user "$ADMIN" --password "$APW" --dry-run --quiet
 run_clean "adv report"    "${BIN[@]}" adversary report 1
 expect_fail "adv delete unknown" "${BIN[@]}" adversary profile delete 4242
 
@@ -284,7 +292,7 @@ say "20. TUI headless"
 run_clean "tui headless" "${BIN[@]}" tui
 
 say "21. help parsers (every group)"
-for g in init status doctor version config env admin audit tools session engagement assess job asset finding evidence case report learn workflow dfir intel plugin adversary update notify soc run backup tui dashboard; do
+for g in init status doctor version config env admin audit tools session engagement assess job asset finding evidence case report learn workflow dfir intel plugin adversary vuln atomic update notify soc run backup tui dashboard; do
   run_ok "help: $g" "${BIN[@]}" "$g" --help
 done
 

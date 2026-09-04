@@ -9,13 +9,19 @@ from __future__ import annotations
 from ksec.adapters.base import ToolAdapter
 from ksec.adapters.curl import CurlAdapter
 from ksec.adapters.dns import DigAdapter
+from ksec.adapters.gobuster import GobusterAdapter
+from ksec.adapters.nikto import NiktoAdapter
 from ksec.adapters.nmap import NmapAdapter
 from ksec.adapters.null import NullAdapter
+from ksec.adapters.sslscan import SslScanAdapter
 
 _BUILTIN_ADAPTERS: tuple[ToolAdapter, ...] = (
     NmapAdapter(),
     DigAdapter(),
     CurlAdapter(),
+    SslScanAdapter(),
+    GobusterAdapter(),
+    NiktoAdapter(),
     NullAdapter(),
 )
 

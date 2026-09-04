@@ -31,6 +31,8 @@ from ksec.logging_setup import setup_logging
 from ksec.notifications.service import EventBus, NotificationService
 from ksec.plugins.manager import PluginManager
 from ksec.policies.engine import PolicyEngine
+from ksec.redteam.service import AtomicService
+from ksec.vuln.service import VulnService
 from ksec.rbac.roles import RbacService
 from ksec.reporting.service import ReportService
 from ksec.scheduler.service import Scheduler
@@ -86,6 +88,8 @@ class KsecContext:
     soc_rules: RuleStore
     soc_alerts: AlertService
     adversary: AdversaryService
+    vuln: VulnService
+    atomic: AtomicService
     updates: UpdateService
 
     def close(self) -> None:
@@ -140,6 +144,8 @@ def bootstrap(overrides: dict | None = None, run_migrations: bool = True) -> Kse
     explain = ExplanationService(capabilities)
 
     adversary = AdversaryService(db)
+    vuln = VulnService(db, policy, findings, audit)
+    atomic = AtomicService(db, policy, workflows, audit)
     updates = UpdateService(db, MIGRATIONS_DIR, backups=backups, plugins=plugins)
 
     soc_events = EventStore(db)
@@ -189,6 +195,8 @@ def bootstrap(overrides: dict | None = None, run_migrations: bool = True) -> Kse
         soc_events=soc_events,
         soc_rules=soc_rules,
         soc_alerts=soc_alerts,
-        adversary=adversary,
-        updates=updates,
+    adversary=adversary,
+    vuln=vuln,
+    atomic=atomic,
+    updates=updates,
     )

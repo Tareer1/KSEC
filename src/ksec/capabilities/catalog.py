@@ -26,7 +26,9 @@ TOOLS: list[ToolDefinition] = [
     ToolDefinition("whois", "whois", "recon", "whois_lookup", "Domain registration intelligence", "whois"),
     ToolDefinition("subfinder", "subfinder", "recon", "subdomain_enum", "Passive subdomain discovery", "subfinder"),
     ToolDefinition("nuclei", "nuclei", "web", "web_vuln_scan", "Fast vulnerability scanner for web applications", "nuclei"),
+    ToolDefinition("nikto", "nikto", "web", "web_vuln_scan", "Web server vulnerability scanner", "nikto"),
     ToolDefinition("gobuster", "gobuster", "web", "directory_brute", "Directory/file brute-forcing", "gobuster"),
+    ToolDefinition("sslscan", "sslscan", "web", "tls_scan", "TLS/SSL protocol and cipher enumeration", "sslscan"),
     ToolDefinition("curl", "curl", "web", "http_probe", "HTTP probing", "curl"),
     ToolDefinition("traceroute", "inetutils-traceroute", "network", "traceroute", "Network path discovery", "traceroute"),
     ToolDefinition("john", "john", "cracking", "password_crack", "Password cracking", "john"),
@@ -36,6 +38,7 @@ TOOLS: list[ToolDefinition] = [
 CAPABILITY_PERMISSION: dict[str, str] = {
     "port_scan": "assess.run",
     "http_probe": "assess.run",
+    "tls_scan": "assess.run",
     "web_vuln_scan": "assess.run",
     "directory_brute": "assess.run",
     "password_crack": "assess.run",

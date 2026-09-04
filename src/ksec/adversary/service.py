@@ -60,6 +60,55 @@ class AdversaryProfile:
         }
 
 
+# Built-in ATT&CK technique -> tactic map used when a step has no tactic
+# recorded (kept in sync with the techniques KSEC can emulate).
+TACTIC_MAP = {
+    "T1590": "reconnaissance",
+    "T1595": "reconnaissance",
+    "T1190": "initial-access",
+    "T1566": "initial-access",
+    "T1059": "execution",
+    "T1053": "persistence",
+    "T1547": "persistence",
+    "T1046": "discovery",
+    "T1082": "discovery",
+    "T1110": "credential-access",
+    "T1071": "command-and-control",
+    "T1071.001": "command-and-control",
+    "T1005": "collection",
+    "T1021": "lateral-movement",
+    "T1567": "exfiltration",
+    "T1055": "defense-evasion",
+}
+
+# ATT&CK tactic chain (kill-chain order). Steps are executed in this order
+# for `adversary chain`; unknown tactics sort last (stable by position).
+CHAIN_PHASES = [
+    "reconnaissance",
+    "resource-development",
+    "initial-access",
+    "execution",
+    "persistence",
+    "privilege-escalation",
+    "defense-evasion",
+    "credential-access",
+    "discovery",
+    "lateral-movement",
+    "collection",
+    "command-and-control",
+    "exfiltration",
+    "impact",
+]
+
+
+def _chain_index(tactic: str) -> int:
+    t = (tactic or "").strip().lower()
+    try:
+        return CHAIN_PHASES.index(t)
+    except ValueError:
+        return len(CHAIN_PHASES)
+
+
 class AdversaryService:
     def __init__(self, db: Database):
         self.db = db
@@ -103,7 +152,9 @@ class AdversaryService:
                             position,
                             self._ttp_id(step.get("technique_id", ""), step.get("tactic", "")),
                             step.get("technique_id", ""),
-                            step.get("tactic", ""),
+                            self._resolve_tactic(
+                                step.get("technique_id", ""), step.get("tactic", "")
+                            ),
                             step["capability"],
                             step.get("description", ""),
                         ),
@@ -111,6 +162,19 @@ class AdversaryService:
         except sqlite3.IntegrityError as exc:
             raise ValueError(f"Profile {name!r} already exists") from exc
         return self.get_profile(cursor.lastrowid)
+
+    def _resolve_tactic(self, technique_id: str, current: str = "") -> str:
+        """Tactic for a technique: stored value, built-in map, then ttps table."""
+        if (current or "").strip():
+            return current.strip()
+        key = (technique_id or "").strip().upper()
+        if key in TACTIC_MAP:
+            return TACTIC_MAP[key]
+        row = self.db.query_one(
+            "SELECT tactic FROM ttps WHERE technique_id = ? AND tactic != '' LIMIT 1",
+            (key,),
+        )
+        return (row["tactic"] if row else "").strip()
 
     def _ttp_id(self, technique_id: str, tactic: str = "") -> int | None:
         if not technique_id:
@@ -245,8 +309,14 @@ class AdversaryService:
         dry_run: bool = True,
         scheduler=None,
         session=None,
+        chain: bool = False,
     ) -> dict:
-        """Run a policy check per step (dry-run plan or live exercise)."""
+        """Run a policy check per step (dry-run plan or live exercise).
+
+        With ``chain=True`` steps execute in ATT&CK kill-chain order
+        (tactic phases) instead of stored position, and each outcome is
+        annotated with its phase.
+        """
         exercise = self.db.query_one(
             "SELECT * FROM advsim_exercises WHERE id = ?", (exercise_id,)
         )
@@ -258,13 +328,14 @@ class AdversaryService:
         )
         if not steps:
             raise ValueError("exercise has no steps")
+        ordered = sorted(steps, key=lambda s: _chain_index(s["tactic"])) if chain else steps
 
         self.db.execute(
             "UPDATE advsim_exercises SET status = 'running', started_at = ? WHERE id = ?",
             (now_utc(), exercise_id),
         )
         outcomes = []
-        for step in steps:
+        for step in ordered:
             from ksec.capabilities.catalog import capability_permission
 
             action = capability_permission(step["capability"])
@@ -275,10 +346,12 @@ class AdversaryService:
                 target=target,
                 engagement_id=engagement_id,
             )
+            tactic = self._resolve_tactic(step["technique_id"], step["tactic"])
             step_outcome = {
                 "position": step["position"],
                 "technique_id": step["technique_id"],
-                "tactic": step["tactic"],
+                "tactic": tactic,
+                "phase": tactic.strip().lower() if tactic else "unknown",
                 "capability": step["capability"],
                 "policy_decision": decision.decision.value,
                 "policy_reason": decision.reason,
@@ -328,11 +401,15 @@ class AdversaryService:
             "UPDATE advsim_exercises SET status = ?, completed_at = ? WHERE id = ?",
             (status, now_utc() if status != "planned" else None, exercise_id),
         )
+        if not chain:
+            for o in outcomes:
+                o.pop("phase", None)
         return {
             "exercise_id": exercise_id,
             "name": exercise["name"],
             "target": target,
             "mode": "dry-run" if dry_run else "live",
+            "order": "chain" if chain else "position",
             "status": status,
             "steps": outcomes,
         }
@@ -359,6 +436,13 @@ class AdversaryService:
         steps = self.exercise_steps(exercise_id)
         covered = sorted({s["technique_id"] for s in steps if s["technique_id"]})
         allowed = [s for s in steps if s["policy_decision"] == "ALLOW"]
+        phase_map: dict[str, set] = {}
+        for s in steps:
+            tactic = self._resolve_tactic(s.get("technique_id", ""), s.get("tactic", ""))
+            tactic = tactic.strip().lower()
+            if tactic and s.get("technique_id"):
+                phase_map.setdefault(tactic, set()).add(s["technique_id"])
+        phases = {p: sorted(ids) for p, ids in phase_map.items()}
         return {
             "exercise_id": exercise_id,
             "name": exercise["name"],
@@ -367,6 +451,8 @@ class AdversaryService:
             "engagement_id": exercise["engagement_id"],
             "techniques_covered": covered,
             "coverage_count": len(covered),
+            "phases": phases,
+            "phase_count": len(phases),
             "steps_total": len(steps),
             "steps_allowed": len(allowed),
             "steps": steps,

@@ -38,7 +38,7 @@ ksec <group> <sub> --help
 | `assess` | Policy-gated assessment run | `assess <target> --workflow --engagement --user --dry-run --explain` |
 | `workflow` | User-defined workflows | `list`, `create --name --step`, `edit`, `validate`, `run <name> <target>`, `history` |
 | `run` | Alias for `workflow run` | `run <name> <target> ...` |
-| `job` | Job lifecycle | `list [--state]`, `status <id>`, `pause`, `resume`, `cancel` |
+| `job` | Job lifecycle + recurring schedules | `list [--state]`, `status <id>`, `pause`, `resume`, `cancel`, `schedule add <cap> <target> --cron '0 6 * * *'`, `schedule list\|remove\|run <id>` |
 | `asset` | Auto-registered assets | `list [--engagement]` |
 | `finding` | Findings + risk | `create --title --severity [--risk ...]`, `list`, `explain <id>` |
 | `evidence` | Evidence (SHA-256) | `add [--content|--file]`, `list`, `verify <id>` |

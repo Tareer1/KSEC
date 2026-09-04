@@ -310,6 +310,25 @@ The scheduler respects `max_concurrent_jobs`, pauses running processes
 interrupted by a crash are marked FAILED on the next start — never blindly
 resumed.
 
+### Recurring schedules (cron automation)
+
+Schedule a capability to run on a cron expression — e.g. daily
+reconnaissance at 06:00:
+
+```bash
+python3 -m ksec job schedule add dns_enum example.com \
+    --cron "0 6 * * *" --engagement 1 --user admin
+python3 -m ksec job schedule list
+python3 -m ksec job schedule run 1          # run now (waits for completion)
+python3 -m ksec job schedule remove 1
+```
+
+Cron fields: `minute hour day-of-month month day-of-week` with `*`,
+`*/step`, ranges and comma lists. Schedules are **policy-checked when
+you create them** — an out-of-scope target is refused — and fire through
+the same scheduler and audit trail as normal jobs (`workflow` is recorded
+as `schedule:<id>`).
+
 ---
 
 ## 11. Security data
@@ -378,6 +397,11 @@ python3 -m ksec report show 1 --raw     # print full content
 ```
 
 Formats: `markdown` (default) and `html`.
+
+Every report opens with an **Executive Summary** — severity counts, the
+highest-risk findings and a recommended next step — written for
+non-technical readers, followed by the full scope/assets/findings/
+evidence/cases sections.
 
 ---
 

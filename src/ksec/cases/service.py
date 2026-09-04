@@ -95,7 +95,7 @@ class CaseService:
             (case_id,),
         )
 
-    def set_status(self, case_id: int, status: str) -> Case:
+    def set_status(self, case_id: int, status: str, actor: str | None = None) -> Case:
         if status not in VALID_STATUS:
             raise ValueError(f"Invalid status: {status}")
         self.db.execute(
@@ -108,14 +108,15 @@ class CaseService:
         if self.audit:
             self.audit.record(
                 event_type="case.status",
+                actor=actor,
                 workspace="BLUE_TEAM",
                 action=f"case.status:{status}",
                 target=f"case:{case_id}",
             )
         return case
 
-    def close(self, case_id: int) -> Case:
-        return self.set_status(case_id, "closed")
+    def close(self, case_id: int, actor: str | None = None) -> Case:
+        return self.set_status(case_id, "closed", actor=actor)
 
     @staticmethod
     def _from_row(row: sqlite3.Row) -> Case:

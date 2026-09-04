@@ -324,6 +324,26 @@ for g in init status doctor version config env admin audit tools session engagem
   run_ok "help: $g" "${BIN[@]}" "$g" --help
 done
 
+say "23. recurring schedules"
+run_ok "job schedule list" "${BIN[@]}" job schedule list
+run_ok "job schedule add (allowed)" "${BIN[@]}" job schedule add dns_lookup example.com --cron "0 6 * * *" --engagement 1 --user "$ADMIN" --password "$APW"
+run_ok "job schedule list (1)" "${BIN[@]}" job schedule list
+expect_fail "job schedule add (out of scope)" "${BIN[@]}" job schedule add port_scan 203.0.113.9 --cron "0 6 * * *" --engagement 1 --user "$ADMIN" --password "$APW"
+expect_fail "job schedule remove unknown" "${BIN[@]}" job schedule remove 4242
+run_ok "job schedule remove" "${BIN[@]}" job schedule remove 1
+
+say "24. report executive summary"
+if "${BIN[@]}" report create --engagement 1 --title 'smoke report' --format markdown --out "$KSEC_HOME/smoke-report.md" | grep -q '"path"'; then
+  PASS=$((PASS + 1)); echo "PASS  report create (file)"
+else
+  FAIL=$((FAIL + 1)); FAILED+=("report file"); echo "FAIL  report create (file)"
+fi
+if grep -q 'Executive Summary' "$KSEC_HOME/smoke-report.md" 2>/dev/null; then
+  PASS=$((PASS + 1)); echo "PASS  report executive summary"
+else
+  FAIL=$((FAIL + 1)); FAILED+=("exec summary"); echo "FAIL  report executive summary"
+fi
+
 # ---------------------------------------------------------------------------
 echo
 echo "=========================================="

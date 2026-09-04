@@ -105,6 +105,11 @@ class ReportService:
         if engagement:
             lines.append(f"- Engagement: {engagement.name} ({engagement.status})")
         lines.append("")
+        summary = self._executive_summary(findings)
+        if summary:
+            lines.append("## Executive Summary")
+            lines.extend(summary)
+            lines.append("")
         lines.append("## Scope")
         if rules:
             for rule in rules:
@@ -146,6 +151,12 @@ class ReportService:
         parts.append(f"<h1>{e(title)}</h1>")
         if engagement:
             parts.append(f"<p>Engagement: <strong>{e(engagement.name)}</strong> ({e(engagement.status)})</p>")
+        summary = self._executive_summary(findings)
+        if summary:
+            parts.append("<h2>Executive Summary</h2><ul>")
+            for line in summary:
+                parts.append(f"<li>{e(line)}</li>")
+            parts.append("</ul>")
         parts.append("<h2>Scope</h2><ul>")
         for rule in rules or []:
             parts.append(f"<li><strong>{e(rule['effect'])}</strong> {e(rule['action'])} &rarr; <code>{e(rule['target'])}</code></li>")
@@ -167,6 +178,42 @@ class ReportService:
         parts.append("</ul>")
         parts.append("</body></html>")
         return "".join(parts)
+
+    @staticmethod
+    def _executive_summary(findings) -> list[str]:
+        """Non-technical summary: severity counts + top risks + priorities."""
+        if not findings:
+            return []
+        order = ("critical", "high", "medium", "low", "info")
+        counts = {sev: 0 for sev in order}
+        for finding in findings:
+            counts[finding.severity] = counts.get(finding.severity, 0) + 1
+        lines = [
+            f"This assessment identified **{len(findings)} finding(s)** across the scope.",
+            "By severity: "
+            + ", ".join(f"{counts[sev]} {sev}" for sev in order if counts[sev])
+            + ".",
+        ]
+        scored = [f for f in findings if f.risk_score is not None]
+        scored.sort(key=lambda f: f.risk_score, reverse=True)
+        if scored:
+            lines.append("Highest-risk findings to address first:")
+            for finding in scored[:3]:
+                lines.append(
+                    f"- {finding.title} (risk {finding.risk_score:.1f}/10, "
+                    f"severity {finding.severity})"
+                )
+        if counts.get("critical") or counts.get("high"):
+            lines.append(
+                "Recommended next step: remediate critical/high findings immediately, "
+                "then re-test to confirm closure."
+            )
+        else:
+            lines.append(
+                "Recommended next step: address medium/low findings on the normal "
+                "remediation schedule and re-test."
+            )
+        return lines
 
     @staticmethod
     def _from_row(row: sqlite3.Row) -> Report:

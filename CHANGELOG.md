@@ -21,7 +21,21 @@ All notable changes are tracked here. Format follows
   always suggests the exact command to run next. Fully offline,
   deterministic keyword routing (Roman-Urdu questions like "nmap kya hai"
   route correctly), mode-aware, `--json`, `--list`
-- 323 unit tests + 176-step CLI smoke suite
+### Added — automation & reporting polish
+
+- **Recurring job schedules** (migration `009`): `ksec job schedule
+  add <capability> <target> --cron '0 6 * * *'` with deterministic
+  5-field cron matcher (`*`, `*/step`, ranges, lists). Creation runs a
+  policy/scope check so automation can never target an unauthorized
+  host; due schedules fire through the normal scheduler + audit trail;
+  `list | remove | run <id>` (run-now waits for completion)
+- Report **executive summary**: every Markdown/HTML report now opens with
+  severity counts, the highest-risk findings and a recommended next
+  step — written for non-technical readers
+- SOC triage **actor attribution**: `ksec soc alert action
+  ack|resolve|close` and `ksec case close` accept optional `--user`
+  and record the acting analyst in the audit log
+- 337 unit tests + 184-step CLI smoke suite
 
 ## [0.2.0] - 2026-09-04
 

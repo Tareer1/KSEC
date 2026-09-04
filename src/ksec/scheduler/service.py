@@ -24,6 +24,7 @@ from ksec.core.errors import KSECError
 from ksec.db.connection import Database
 from ksec.jobs.models import Job, JobRepository
 from ksec.identity.users import now_utc
+from ksec.scheduler.schedules import ScheduleStore, cron_matches
 
 _STDOUT_LIMIT = 100_000
 _STDERR_LIMIT = 10_000
@@ -44,6 +45,7 @@ class Scheduler:
         self.adapters = adapters or AdapterRegistry()
         self.plugin_manager = plugin_manager
         self.jobs = JobRepository(db)
+        self.schedules = ScheduleStore(db)
         # Optional hook for automatic IOC extraction from job evidence.
         # Assigned by bootstrap after the threat-intel service exists.
         self.intel_service = None
@@ -181,6 +183,7 @@ class Scheduler:
             self._wake.wait(timeout=0.2)
             self._wake.clear()
             self._reap()
+            self._run_due_schedules()
             with self._lock:
                 if len(self._threads) >= self.config.max_concurrent_jobs:
                     continue
@@ -318,6 +321,31 @@ class Scheduler:
         else:
             message = (stderr.strip() or f"exit code {proc.returncode}")[:2000]
             self.jobs.fail(job_id, message, exit_code=proc.returncode)
+
+    def _run_due_schedules(self) -> None:
+        """Submit a job for every enabled schedule whose cron matches now."""
+        import datetime as _dt
+
+        now = _dt.datetime.utcnow().replace(second=0, microsecond=0)
+        for schedule in self.schedules.list(enabled_only=True):
+            if not cron_matches(schedule.cron, now):
+                continue
+            last = schedule.last_run_at
+            if last and last[:16] == now.strftime("%Y-%m-%dT%H:%M"):
+                continue  # already fired this minute
+            try:
+                self.submit(
+                    capability=schedule.capability,
+                    target=schedule.target,
+                    options=schedule.options,
+                    session_id=None,
+                    user_id=schedule.user_id,
+                    workspace=schedule.workspace,
+                    workflow=f"schedule:{schedule.id}",
+                )
+                self.schedules.mark_run(schedule.id)
+            except KSECError:
+                continue
 
     def _auto_extract_iocs(self, job, outcome: dict) -> None:
         """Auto-register IOCs from a completed job's parsed entities and raw

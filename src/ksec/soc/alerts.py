@@ -152,7 +152,7 @@ class AlertService:
         row = self.db.query_one(sql, params)
         return int(row["c"]) if row else 0
 
-    def set_status(self, alert_row_id: int, status: str) -> Alert:
+    def set_status(self, alert_row_id: int, status: str, actor: str | None = None) -> Alert:
         if status not in VALID_STATUS:
             raise KSECError(f"invalid alert status: {status}")
         alert = self.get(alert_row_id)
@@ -174,6 +174,7 @@ class AlertService:
         if self.audit:
             self.audit.record(
                 event_type=f"alert.{status}",
+                actor=actor,
                 workspace="BLUE_TEAM",
                 action=f"alert.{status}",
                 target=f"alert:{alert_row_id}",
@@ -181,11 +182,13 @@ class AlertService:
             )
         return updated
 
-    def acknowledge(self, alert_row_id: int) -> Alert:
-        return self.set_status(alert_row_id, "acknowledged")
+    def acknowledge(self, alert_row_id: int, actor: str | None = None) -> Alert:
+        return self.set_status(alert_row_id, "acknowledged", actor=actor)
 
-    def resolve(self, alert_row_id: int, *, case_id: int | None = None) -> Alert:
-        alert = self.set_status(alert_row_id, "resolved")
+    def resolve(
+        self, alert_row_id: int, *, case_id: int | None = None, actor: str | None = None
+    ) -> Alert:
+        alert = self.set_status(alert_row_id, "resolved", actor=actor)
         if case_id is not None:
             self.db.execute(
                 "UPDATE alerts SET case_id = ? WHERE id = ?", (case_id, alert.id)

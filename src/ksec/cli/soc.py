@@ -169,12 +169,23 @@ def cmd_soc_alert_action(ctx: KsecContext, args) -> int:
     if alert is None:
         emit(f"unknown alert: {args.id}", args.json, args.quiet)
         return 1
+    actor = None
+    if getattr(args, "user", None):
+        try:
+            from ksec.identity.users import UserRepository
+
+            actor = UserRepository(ctx.db).authenticate(
+                args.user, getattr(args, "password", None)
+            ).username
+        except KSECError as exc:
+            emit(exc.message, args.json, args.quiet)
+            return 1
     if args.action == "ack":
-        updated = ctx.soc_alerts.acknowledge(args.id)
+        updated = ctx.soc_alerts.acknowledge(args.id, actor=actor)
     elif args.action == "resolve":
-        updated = ctx.soc_alerts.resolve(args.id, case_id=args.case)
+        updated = ctx.soc_alerts.resolve(args.id, case_id=args.case, actor=actor)
     elif args.action == "close":
-        updated = ctx.soc_alerts.set_status(args.id, "closed")
+        updated = ctx.soc_alerts.set_status(args.id, "closed", actor=actor)
     else:
         emit(f"unknown action: {args.action}", args.json, args.quiet)
         return 1

@@ -288,8 +288,17 @@ def cmd_case_add_finding(ctx: KsecContext, args) -> int:
 
 
 def cmd_case_close(ctx: KsecContext, args) -> int:
+    actor = None
+    if getattr(args, "user", None):
+        try:
+            from ksec.identity.users import UserRepository
+
+            actor = UserRepository(ctx.db).authenticate(args.user, args.password).username
+        except KSECError as exc:
+            emit(exc.message, args.json, args.quiet)
+            return 1
     try:
-        case = ctx.cases.close(args.id)
+        case = ctx.cases.close(args.id, actor=actor)
     except (KSECError, ValueError) as exc:
         emit(str(exc), args.json, args.quiet)
         return 1

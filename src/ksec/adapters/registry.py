@@ -18,6 +18,8 @@ from ksec.adapters.nmap import NmapAdapter
 from ksec.adapters.null import NullAdapter
 from ksec.adapters.smbmap import SmbMapAdapter
 from ksec.adapters.sslscan import SslScanAdapter
+from ksec.adapters.theharvester import TheHarvesterAdapter
+from ksec.adapters.whatweb import WhatwebAdapter
 from ksec.adapters.wpscan import WpscanAdapter
 
 _BUILTIN_ADAPTERS: tuple[ToolAdapter, ...] = (
@@ -32,6 +34,8 @@ _BUILTIN_ADAPTERS: tuple[ToolAdapter, ...] = (
     HydraAdapter(),
     Enum4LinuxAdapter(),
     SmbMapAdapter(),
+    WhatwebAdapter(),
+    TheHarvesterAdapter(),
     NullAdapter(),
 )
 

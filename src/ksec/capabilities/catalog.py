@@ -37,6 +37,8 @@ TOOLS: list[ToolDefinition] = [
     ToolDefinition("hydra", "hydra", "cracking", "auth_test", "Online login/authentication testing", "hydra"),
     ToolDefinition("enum4linux", "enum4linux", "network", "smb_enum", "SMB/NetBIOS enumeration", "enum4linux"),
     ToolDefinition("smbmap", "smbmap", "network", "smb_map", "SMB share and access mapping", "smbmap"),
+    ToolDefinition("whatweb", "whatweb", "web", "web_fingerprint", "Web technology and content fingerprinting", "whatweb"),
+    ToolDefinition("theHarvester", "theharvester", "recon", "osint_harvest", "Passive OSINT email/host/IP harvesting", "theHarvester"),
 ]
 
 # Capability -> permission required to run it (RBAC boundary).
@@ -48,11 +50,13 @@ CAPABILITY_PERMISSION: dict[str, str] = {
     "directory_brute": "assess.run",
     "password_crack": "assess.run",
     "test_scan": "assess.run",
+    "web_fingerprint": "assess.run",
     "dns_lookup": "recon.run",
     "whois_lookup": "recon.run",
     "subdomain_enum": "recon.run",
     "traceroute": "recon.run",
     "dns_enum": "recon.run",
+    "osint_harvest": "recon.run",
     "wpscan": "assess.run",
     "auth_test": "assess.run",
     "smb_enum": "assess.run",

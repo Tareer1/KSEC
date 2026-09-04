@@ -741,6 +741,40 @@ TOPICS: tuple[Topic, ...] = (
             ("p", "If subfinder is not installed, KSEC shows it as missing — 'ksec tools install subdomain_enum' (Kali package: subfinder)."),
         ),
     ),
+    Topic(
+        id="tool-whatweb",
+        title="whatweb — web technology fingerprinting",
+        kind="tool",
+        audience=("all", "red"),
+        summary=(
+            "whatweb inspects a website and reports which technologies it runs: server "
+            "software, frameworks (WordPress, jQuery, ...), titles and the IP behind it. "
+            "In KSEC it is the web_fingerprint capability."
+        ),
+        keywords=("whatweb", "fingerprint", "web tech", "technology", "framework", "whatweb kya hai", "website technology"),
+        sections=(
+            ("cmd", "ksec run web_fingerprint example.com --engagement 1 --user admin"),
+            ("p", "Output: host entities (IP/domain auto-register as assets) plus web_tech entities with server, title and detected frameworks + versions — perfect input before picking wpscan/nikto."),
+            ("tip", "Run it before deep scans: knowing the stack (WordPress? custom PHP? nginx?) tells you which scanner to run next."),
+        ),
+    ),
+    Topic(
+        id="tool-theharvester",
+        title="theHarvester — passive OSINT harvesting",
+        kind="tool",
+        audience=("all", "purple"),
+        summary=(
+            "theHarvester collects emails, hostnames/subdomains and IPs about a domain from "
+            "public sources — pure research that never contacts the target. In KSEC it is "
+            "the osint_harvest capability."
+        ),
+        keywords=("theharvester", "harvester", "osint", "email harvest", "emails", "passive recon", "harvest", "theharvester kya hai"),
+        sections=(
+            ("cmd", "ksec run osint_harvest example.com --user purple --workspace RESEARCH_OSINT"),
+            ("p", "Default source crtsh (certificate transparency) needs no API key; emails feed the intel module, non-wildcard hostnames register as domain assets + IOC candidates."),
+            ("tip", "Purple flow: theHarvester -> DNS recon -> IOCs -> share with Blue so the SOC knows what an attacker could learn about your estate."),
+        ),
+    ),
     # -----------------------------------------------------------------------
     # Role playbooks — the step-by-step "tareeqa" per job
     # -----------------------------------------------------------------------

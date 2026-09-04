@@ -15,7 +15,9 @@ from ksec.parsers.hydra import HydraParser
 from ksec.parsers.nikto import NiktoParser
 from ksec.parsers.nmap_xml import NmapXmlParser
 from ksec.parsers.smb import Enum4LinuxParser, SmbMapParser
+from ksec.parsers.theharvester import TheHarvesterParser
 from ksec.parsers.tls_scan import TlsScanParser
+from ksec.parsers.whatweb import WhatwebParser
 from ksec.parsers.wpscan import WpscanParser
 
 # Canonical entries keyed by the parser's own name.
@@ -31,6 +33,8 @@ _PARSERS: dict[str, OutputParser] = {
     HydraParser().name: HydraParser(),
     Enum4LinuxParser().name: Enum4LinuxParser(),
     SmbMapParser().name: SmbMapParser(),
+    WhatwebParser().name: WhatwebParser(),
+    TheHarvesterParser().name: TheHarvesterParser(),
 }
 
 # Tool-name aliases for convenience / legacy references.
@@ -46,6 +50,8 @@ _ALIASES: dict[str, str] = {
     "hydra": "hydra",
     "enum4linux": "enum4linux",
     "smbmap": "smbmap",
+    "whatweb": "whatweb",
+    "theharvester": "theharvester",
 }
 
 

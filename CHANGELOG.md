@@ -30,8 +30,14 @@ All notable changes are tracked here. Format follows
 - **DFIR forensics extras**: `dfir artifact hash` records SHA-256/SHA-1 +
   size of a collected file on the artifact (audited); `dfir export` writes
   the merged artifact+event chronology as CSV or JSONL.
-- Knowledge base grew to 43 topics (siem, windowed-rules, api, schedules,
-  dashboard + refreshed dfir/plugins/learner cards).
+- Knowledge base grew to 45 topics (siem, windowed-rules, api, schedules,
+  dashboard, whatweb, theHarvester + refreshed dfir/plugins/learner cards).
+- Arsenal +2: **whatweb** (web_fingerprint — server/framework/title/IP
+  fingerprints as host + web_tech entities) and **theHarvester**
+  (osint_harvest — passive emails/hosts/IPs from public sources; default
+  crtsh source). Both live-verified: whatweb against example.com (assets
+  registered from host entities), theHarvester against iana.org (10
+  entities, subdomains auto-registered as domain assets).
 
 ### Added
 
@@ -75,7 +81,7 @@ All notable changes are tracked here. Format follows
   through the same services, policy and audit trail as the CLI
 - Confirmed AI-free: `dependencies = []`, offline mentor is a
   deterministic keyword router — no LLM/cloud anywhere
-- 378 unit tests + 201-step CLI smoke suite (updated with this round)
+- 387 unit tests + 201-step CLI smoke suite (updated with this round)
 
 ## [0.2.0] - 2026-09-04
 

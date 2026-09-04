@@ -192,6 +192,28 @@ EXPLANATIONS: dict[str, ToolExplanation] = {
         outputs="Host + share permission map as structured entities.",
         learn_more="smbmap --help",
     ),
+    "whatweb": ToolExplanation(
+        beginner="This tool looks at a website and tells you which technologies it is built with — server software, frameworks and content.",
+        technical="Web technology fingerprinting (whatweb).",
+        why_selected="Provider for the web_fingerprint capability.",
+        data_collected="HTTP status, server header, title, IP and detected frameworks/versions per URL.",
+        risk="ACTIVE_SAFE — ordinary HTTP requests to the target.",
+        privilege="None.",
+        inputs="Target URL or host.",
+        outputs="host entities (auto-assets) + web_tech fingerprints (server, title, technologies).",
+        learn_more="whatweb --help",
+    ),
+    "theHarvester": ToolExplanation(
+        beginner="This tool searches public sources for emails and subdomains belonging to a domain — pure research, nothing touches the target itself.",
+        technical="Passive OSINT email/host/IP harvesting (theHarvester) from public sources.",
+        why_selected="Provider for the osint_harvest capability.",
+        data_collected="Emails, hostnames/subdomains and IPs found in public/certificate-transparency sources.",
+        risk="PASSIVE — queries public sources; the target is never contacted.",
+        privilege="None.",
+        inputs="Root domain; optional source (-b, default crtsh) and limit.",
+        outputs="host entities (auto-assets), osint_email / osint_host observations.",
+        learn_more="theHarvester -h",
+    ),
 }
 
 _DEFAULT_EXPLANATION = ToolExplanation(

@@ -1,0 +1,31 @@
+{
+  "id": "ksec.http-headers",
+  "name": "HTTP Headers Collector",
+  "version": "1.0.0",
+  "description": "Collects HTTP response headers from a URL using curl. Demonstrates the KSEC plugin architecture: a new capability added without changing the core engine (spec 04#52).",
+  "author": "KSEC",
+  "category": "web",
+  "trust_level": "CORE_TRUSTED",
+  "permissions": ["network.access", "tool.execute"],
+  "capabilities": ["http_headers"],
+  "dependencies": {"tools": ["curl"], "python": ">=3.10"},
+  "safety": "ACTIVE_SAFE",
+  "adapters": [
+    {
+      "capability": "http_headers",
+      "tool": "curl",
+      "safety": "ACTIVE_SAFE",
+      "parser": "http_headers",
+      "module": "adapter.py",
+      "class": "HttpHeadersAdapter"
+    }
+  ],
+  "parsers": [
+    {
+      "name": "http_headers",
+      "module": "parser.py",
+      "class": "HttpHeadersParser"
+    }
+  ],
+  "health_check": {"module": "health.py", "class": "check"}
+}

@@ -1,0 +1,1 @@
+"""Tool adapter subsystem (spec: TOOL ADAPTER LAYER)."""

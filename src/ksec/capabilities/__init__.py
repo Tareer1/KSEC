@@ -1,0 +1,1 @@
+"""Kali capability registry subsystem."""

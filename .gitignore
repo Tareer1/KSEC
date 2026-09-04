@@ -1,0 +1,27 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+
+# Virtual environments
+.venv/
+venv/
+
+# Test / tooling caches
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Local KSEC state (database, logs, config with secrets)
+.ksec/
+*.db
+*.db-wal
+*.db-shm
+*.log
+.env
+
+# OS
+.DS_Store

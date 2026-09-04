@@ -1,0 +1,1 @@
+"""Learning subsystem (AI-free curriculum)."""

@@ -41,6 +41,7 @@ rm -rf /tmp/ksec-wt && mkdir -p /tmp/ksec-wt
 17. [Dashboard API and TUI](#17-dashboard-api-and-tui)
 18. [Audit trail](#18-audit-trail)
 19. [Final state](#19-final-state)
+20. [Live demo: SIEM ingestion + windowed brute-force detection](#20-live-demo-siem-ingestion-windowed-brute-force-detection)
 
 ---
 
@@ -710,3 +711,200 @@ notifications: 1| audit events: 9   | db schema: v7
 
 **Recreate it yourself:** run the snippets in order against a fresh
 `KSEC_HOME` — all data above was produced by these exact commands.
+
+---
+
+## 20. Live demo — SIEM ingestion + windowed brute-force detection
+
+> **How this section was produced:** every command below ran for real on a
+> fresh data directory (`KSEC_HOME=/tmp/ksec-siem-demo`). Three raw sshd
+> syslog lines were pushed over **UDP** to `ksec siem listen`; a windowed
+> detection rule (`3 auth_failures from one IP in 5 minutes`) fired on the
+> third datagram and auto-opened a case. Output is the actual command
+> output.
+
+### 20.1 The detection rule — count inside a window
+
+```bash
+export PYTHONPATH=src KSEC_HOME=/tmp/ksec-siem-demo
+python3 -m ksec init --username admin --password 'demo-pass'
+
+python3 -m ksec soc rule add --name ssh-brute-3in5 \
+    --event-type auth_failure --field ip --operator eq \
+    --value 203.0.113.77 --within 5 --count 3 \
+    --severity high --risk-boost 2.5
+```
+
+```json
+{
+  "id": 1,
+  "name": "ssh-brute-3in5",
+  "enabled": true,
+  "event_type": "auth_failure",
+  "field": "ip",
+  "operator": "eq",
+  "value": "203.0.113.77",
+  "severity": "high",
+  "risk_boost": 2.5,
+  "open_case": true,
+  "window_minutes": 5,
+  "window_count": 3
+}
+```
+
+The `--within 5 --count 3` pair makes this a **windowed rule**: it counts
+matching events (`event_type=auth_failure` **and** `ip=203.0.113.77`) inside
+a 5-minute window and fires exactly once — when the third event arrives.
+One alert per burst, never a flood.
+
+### 20.2 A real log stream over UDP (`ksec siem listen`)
+
+Terminal 1 — start the listener, stop after 3 datagrams:
+
+```bash
+python3 -m ksec siem listen --port 15515 --source ssh_syslog --run 3 --json
+```
+
+Terminal 2 — three raw sshd lines, the way rsyslog would forward them
+(`*.* @127.0.0.1:15514`):
+
+```bash
+python3 - <<'EOF'
+import socket, time
+s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+lines = [
+    '<134>Sep  4 10:01:21 edge01 sshd[2213]: Failed password for root from 203.0.113.77 port 51234 ssh2',
+    '<134>Sep  4 10:01:22 edge01 sshd[2213]: Failed password for root from 203.0.113.77 port 51235 ssh2',
+    '<134>Sep  4 10:01:23 edge01 sshd[2213]: Failed password for root from 203.0.113.77 port 51236 ssh2',
+]
+for line in lines:
+    s.sendto(line.encode(), ('127.0.0.1', 15515))
+    time.sleep(0.4)
+s.close()
+EOF
+```
+
+Listener summary (real output) — every record parsed, all three ingested,
+and the windowed rule **fired once**:
+
+```json
+{
+  "lines": 3,
+  "parsed": 3,
+  "duplicates": 0,
+  "ingested": 3,
+  "alerts": 1,
+  "errors": 0,
+  "dry_run": false
+}
+```
+
+### 20.3 What the pipeline stored
+
+Raw `Failed password ... from 203.0.113.77` lines were normalized into
+structured events — the attacker IP extracted from the message body, host
+`edge01`, tag `sshd` (parsed from the RFC3164 header):
+
+```text
+$ python3 -m ksec soc event list
+   3  auth_failure     medium   203.0.113.77             ssh_syslog
+   2  auth_failure     medium   203.0.113.77             ssh_syslog
+   1  auth_failure     medium   203.0.113.77             ssh_syslog
+```
+
+The alert carries the correlation context and auto-opened a high-risk case:
+
+```text
+$ python3 -m ksec soc alert list
+   1  [HIGH    ] risk=7.2  open         auth_failure     HIGH auth_failure 203.0.113.77 (rule ssh-brute-3in5)
+
+1 alert(s) — 1 open
+
+$ python3 -m ksec soc alert show 1
+{
+  "id": 1,
+  "severity": "high",
+  "risk_score": 7.2,
+  "status": "open",
+  "rule_id": 1,
+  "case_id": 1,
+  "summary": "HIGH auth_failure 203.0.113.77 (rule ssh-brute-3in5)",
+  "details": {
+    "entity": ["203.0.113.77", "edge01"],
+    "related_event_count": 2,
+    "matched_rule": "ssh-brute-3in5",
+    "severity_gate": false
+  }
+}
+
+$ python3 -m ksec case list
+  1  high     open         findings=0   HIGH alert: auth_failure 203.0.113.77
+```
+
+### 20.4 More formats via file watch (`ksec siem watch --once`)
+
+The same feed parses **JSONL** (Zeek), **RFC3164 syslog** (Suricata) and
+**auditd key=value** records from a growing log file:
+
+```bash
+printf '%s\n' \
+  '<134>Sep  4 10:05:01 fw01 suricata: ET SCAN Potential TCP Scan from 198.51.100.10' \
+  '{"event_id": "zeek-conn-1", "source": "zeek", "event_type": "conn", "ip": "203.0.113.202", "severity": "low", "details": {"proto": "tcp", "port": 4444}}' \
+  'type=SYSCALL msg=audit(1725433201.123:456): pid=2213 uid=0 auid=1000 msg="su root" key=privilege' \
+  > mixed.log
+python3 -m ksec siem watch mixed.log --once --source filewatch
+```
+
+```text
+siem feed: 3 line(s), 3 parsed, 3 ingested, 0 duplicate(s), 0 alert(s), 0 error(s)
+```
+
+```text
+$ python3 -m ksec soc event list
+   6  syscall          medium   -                        filewatch
+   5  conn             low      203.0.113.202            zeek
+   4  port_scan        medium   198.51.100.10            filewatch
+   ...
+```
+
+### 20.5 Idempotent intake — re-sending never duplicates
+
+Re-feeding the exact same file (what happens when rsyslog restarts and
+replays a burst) produces **zero new events** — deterministic per-record
+ids make intake idempotent:
+
+```text
+$ python3 -m ksec siem watch mixed.log --once --source filewatch
+siem feed: 3 line(s), 3 parsed, 0 ingested, 3 duplicate(s), 0 alert(s), 0 error(s)
+```
+
+Alert count is still 1 — no duplicate alerts, no duplicate cases:
+
+```text
+$ python3 -m ksec soc alert list | tail -1
+1 alert(s) — 1 open
+```
+
+### 20.6 The audit trail sees everything
+
+SIEM-driven events produce the same audited chain as manual ingestion:
+
+```text
+$ python3 -m ksec audit list --limit 6 --user admin --password demo-pass
+dcd41300ac1a  2026-09-04T04:16:01  alert.create   -          success alert.create
+80acad90715e  2026-09-04T04:16:01  case.create    -          success case.create
+b45dfc56140d  2026-09-04T04:15:51  init.admin_user admin      success init.admin_user
+
+3 audit event(s)
+```
+
+### What this section demonstrated
+
+| Capability | What you saw |
+|---|---|
+| Windowed rules | 3 events in 5 min → exactly 1 alert on the crossing event |
+| SIEM listen | real UDP syslog datagrams → normalized events (IP from message body) |
+| SIEM watch | JSONL / syslog / auditd auto-detected from one file |
+| Deduplication | replay of the same lines = 0 new events, 0 duplicate alerts |
+| Pipeline | normalize → correlate → rule → risk 7.2 → alert → auto-case |
+| Audit | `alert.create` + `case.create` recorded for streamed events |

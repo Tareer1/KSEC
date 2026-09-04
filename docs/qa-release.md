@@ -55,7 +55,7 @@ matches the code.
 git checkout main && git pull
 make test && make smoke        # gates
 # bump version, update CHANGELOG, commit
-git tag -a v0.2.0 -m "KSEC v0.2.0"
+git tag -a v0.3.0 -m "KSEC v0.3.0"
 git push origin main --tags
 ```
 

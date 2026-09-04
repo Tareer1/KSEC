@@ -92,7 +92,7 @@ Implemented so far (spec Stages 1–9 core, interfaces included):
       plugin adversary vuln atomic soc siem run backup tui dashboard ask role api`
 - [x] 387 unit tests (stdlib unittest, no dependencies) + 201-step CLI smoke suite
   (`python3 -m unittest discover -s tests` / `bash scripts/smoke.sh`)
-- [x] v0.2.0 — changelog in `CHANGELOG.md`; docs in [`docs/`](docs/README.md)
+- [x] **v0.3.0** — changelog in `CHANGELOG.md`; docs in [`docs/`](docs/README.md)
 
 ## Quick start (no installation required)
 

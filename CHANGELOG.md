@@ -3,7 +3,7 @@
 All notable changes are tracked here. Format follows
 [Keep a Changelog](https://keepachangelog.com/) and semantic versioning.
 
-## Unreleased — real-use power round
+## [0.3.0] - 2026-09-04 — real-use power round
 
 ### Added — SOC intake & forensics round
 
@@ -88,6 +88,9 @@ All notable changes are tracked here. Format follows
 - Confirmed AI-free: `dependencies = []`, offline mentor is a
   deterministic keyword router — no LLM/cloud anywhere
 - 387 unit tests + 201-step CLI smoke suite (updated with this round)
+- **Release 0.3.0**: all real-use rounds above (arsenal + mentor +
+  automation + SOC intake + API + dashboard + forensics + QA gate)
+  consolidated into one versioned, push-ready product.
 
 ## [0.2.0] - 2026-09-04
 

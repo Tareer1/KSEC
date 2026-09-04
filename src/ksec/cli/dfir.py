@@ -6,16 +6,20 @@ from ksec.cli.output import emit
 
 
 def cmd_artifact_add(ctx: KsecContext, args) -> int:
-    artifact = ctx.dfir.add_artifact(
-        args.case,
-        args.name,
-        args.type,
-        host=args.host or "",
-        details=args.details or "",
-        tool=args.tool or "",
-        evidence_id=args.evidence,
-        collected_at=args.collected_at,
-    )
+    try:
+        artifact = ctx.dfir.add_artifact(
+            args.case,
+            args.name,
+            args.type,
+            host=args.host or "",
+            details=args.details or "",
+            tool=args.tool or "",
+            evidence_id=args.evidence,
+            collected_at=args.collected_at,
+        )
+    except ValueError as exc:
+        emit(str(exc), args.json, args.quiet)
+        return 1
     emit(
         {
             "created": True,
@@ -59,15 +63,19 @@ def cmd_artifact_list(ctx: KsecContext, args) -> int:
 
 
 def cmd_event_add(ctx: KsecContext, args) -> int:
-    event = ctx.dfir.add_event(
-        args.case,
-        args.time,
-        args.type,
-        actor=args.actor or "",
-        source=args.source or "",
-        details=args.details or "",
-        artifact_id=args.artifact,
-    )
+    try:
+        event = ctx.dfir.add_event(
+            args.case,
+            args.time,
+            args.type,
+            actor=args.actor or "",
+            source=args.source or "",
+            details=args.details or "",
+            artifact_id=args.artifact,
+        )
+    except ValueError as exc:
+        emit(str(exc), args.json, args.quiet)
+        return 1
     emit(
         {
             "created": True,

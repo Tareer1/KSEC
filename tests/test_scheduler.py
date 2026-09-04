@@ -27,6 +27,26 @@ class SchedulerTest(KsecTestCase):
         self.assertEqual(completed.state, "FAILED")
         self.assertIn("No adapter", completed.error)
 
+    def test_job_submit_recorded_in_audit(self):
+        # Regression: tool execution (the most security-relevant action) used
+        # to leave no audit trail — only session.open appeared.
+        from ksec.identity.users import UserRepository
+
+        users = UserRepository(self.ctx.db)
+        user = users.create("redops", "pw123")
+        self.ctx.rbac.assign_role(user.id, "operator")
+        job = self.ctx.scheduler.submit(
+            capability="test_scan", target="10.0.0.1", user_id=user.id,
+            workspace="RED_TEAM",
+        )
+        self.ctx.scheduler.wait_for(job.id, timeout=15)
+        events = self.ctx.audit.list(limit=10)
+        submits = [e for e in events if e["event_type"] == "job.submit"]
+        self.assertEqual(len(submits), 1)
+        self.assertEqual(submits[0]["actor"], "redops")
+        self.assertIn("test_scan", submits[0]["action"])
+        self.assertEqual(submits[0]["target"], "10.0.0.1")
+
     def test_cancel_queued_job(self):
         job = self.ctx.jobs.create(capability="test_scan")
         cancelled = self.ctx.scheduler.cancel(job.id)

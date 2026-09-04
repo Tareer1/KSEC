@@ -10,6 +10,7 @@ import sqlite3
 from dataclasses import dataclass
 from datetime import datetime
 
+from ksec.audit.service import AuditService
 from ksec.db.connection import Database
 from ksec.identity.users import now_utc
 
@@ -62,8 +63,9 @@ class TimelineEvent:
 
 
 class DfirService:
-    def __init__(self, db: Database):
+    def __init__(self, db: Database, audit: AuditService | None = None):
         self.db = db
+        self.audit = audit
 
     # -- artifacts ---------------------------------------------------------
 
@@ -83,6 +85,15 @@ class DfirService:
             raise ValueError(f"Invalid artifact type: {artifact_type}")
         if not name or not name.strip():
             raise ValueError("Artifact name must not be empty")
+        case = self.db.query_one("SELECT id FROM cases WHERE id = ?", (case_id,))
+        if case is None:
+            raise ValueError(f"Unknown case: {case_id}")
+        if evidence_id is not None:
+            evidence = self.db.query_one(
+                "SELECT id FROM evidence WHERE id = ?", (evidence_id,)
+            )
+            if evidence is None:
+                raise ValueError(f"Unknown evidence: {evidence_id}")
         collected = normalize_time(collected_at) or now_utc()
         with self.db.transaction() as conn:
             cursor = conn.execute(
@@ -92,7 +103,16 @@ class DfirService:
                 (case_id, host, artifact_type, name.strip(), details, tool, evidence_id,
                  collected, now_utc()),
             )
-        return self.get_artifact(cursor.lastrowid)
+        artifact = self.get_artifact(cursor.lastrowid)
+        assert artifact is not None
+        if self.audit:
+            self.audit.record(
+                event_type="dfir.artifact.add",
+                workspace="BLUE_TEAM",
+                action="dfir.artifact.add",
+                target=f"case:{case_id} artifact:{artifact.id}",
+            )
+        return artifact
 
     def get_artifact(self, artifact_id: int) -> Artifact | None:
         row = self.db.query_one("SELECT * FROM dfir_artifacts WHERE id = ?", (artifact_id,))
@@ -133,6 +153,15 @@ class DfirService:
         normalized = normalize_time(event_time)
         if normalized is None:
             raise ValueError("event_time must be an ISO-8601 timestamp")
+        case = self.db.query_one("SELECT id FROM cases WHERE id = ?", (case_id,))
+        if case is None:
+            raise ValueError(f"Unknown case: {case_id}")
+        if artifact_id is not None:
+            artifact = self.db.query_one(
+                "SELECT id FROM dfir_artifacts WHERE id = ?", (artifact_id,)
+            )
+            if artifact is None:
+                raise ValueError(f"Unknown artifact: {artifact_id}")
         with self.db.transaction() as conn:
             cursor = conn.execute(
                 "INSERT INTO dfir_timeline (case_id, artifact_id, event_time, event_type,"
@@ -140,7 +169,16 @@ class DfirService:
                 (case_id, artifact_id, normalized, event_type, actor, source, details,
                  now_utc()),
             )
-        return self.get_event(cursor.lastrowid)
+        event = self.get_event(cursor.lastrowid)
+        assert event is not None
+        if self.audit:
+            self.audit.record(
+                event_type="dfir.event.add",
+                workspace="BLUE_TEAM",
+                action="dfir.event.add",
+                target=f"case:{case_id} event:{event.id}",
+            )
+        return event
 
     def get_event(self, event_id: int) -> TimelineEvent | None:
         row = self.db.query_one("SELECT * FROM dfir_timeline WHERE id = ?", (event_id,))

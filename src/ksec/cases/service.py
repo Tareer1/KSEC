@@ -7,6 +7,7 @@ from __future__ import annotations
 import sqlite3
 from dataclasses import dataclass
 
+from ksec.audit.service import AuditService
 from ksec.db.connection import Database
 from ksec.identity.users import now_utc
 
@@ -28,8 +29,9 @@ class Case:
 
 
 class CaseService:
-    def __init__(self, db: Database):
+    def __init__(self, db: Database, audit: AuditService | None = None):
         self.db = db
+        self.audit = audit
 
     def create(
         self,
@@ -51,7 +53,17 @@ class CaseService:
                 " owner, created_at, updated_at) VALUES (?, ?, ?, ?, 'open', ?, ?, ?)",
                 (engagement_id, title.strip(), description, severity, owner, now, now),
             )
-        return self.get(cursor.lastrowid)
+        case = self.get(cursor.lastrowid)
+        assert case is not None
+        if self.audit:
+            self.audit.record(
+                event_type="case.create",
+                actor=owner or None,
+                workspace="BLUE_TEAM",
+                action="case.create",
+                target=f"case:{case.id}",
+            )
+        return case
 
     def get(self, case_id: int) -> Case | None:
         row = self.db.query_one("SELECT * FROM cases WHERE id = ?", (case_id,))
@@ -68,6 +80,13 @@ class CaseService:
             "INSERT OR IGNORE INTO case_findings (case_id, finding_id) VALUES (?, ?)",
             (case_id, finding_id),
         )
+        if self.audit:
+            self.audit.record(
+                event_type="case.add_finding",
+                workspace="BLUE_TEAM",
+                action="case.add_finding",
+                target=f"case:{case_id} finding:{finding_id}",
+            )
 
     def findings(self, case_id: int) -> list[sqlite3.Row]:
         return self.db.query_all(
@@ -86,6 +105,13 @@ class CaseService:
         case = self.get(case_id)
         if case is None:
             raise ValueError(f"Unknown case: {case_id}")
+        if self.audit:
+            self.audit.record(
+                event_type="case.status",
+                workspace="BLUE_TEAM",
+                action=f"case.status:{status}",
+                target=f"case:{case_id}",
+            )
         return case
 
     def close(self, case_id: int) -> Case:

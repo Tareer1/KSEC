@@ -19,6 +19,7 @@ from typing import Optional
 from ksec.adapters.base import CommandRequest
 from ksec.adapters.registry import AdapterRegistry
 from ksec.config.loader import KsecConfig
+from ksec.audit.service import AuditService
 from ksec.core.errors import KSECError
 from ksec.db.connection import Database
 from ksec.jobs.models import Job, JobRepository
@@ -35,9 +36,11 @@ class Scheduler:
         config: KsecConfig,
         adapters: AdapterRegistry | None = None,
         plugin_manager=None,
+        audit: AuditService | None = None,
     ):
         self.db = db
         self.config = config
+        self.audit = audit
         self.adapters = adapters or AdapterRegistry()
         self.plugin_manager = plugin_manager
         self.jobs = JobRepository(db)
@@ -95,6 +98,22 @@ class Scheduler:
             workflow=workflow,
             priority=priority,
         )
+        if self.audit:
+            actor = None
+            if user_id is not None:
+                row = self.db.query_one(
+                    "SELECT username FROM users WHERE id = ?", (user_id,)
+                )
+                actor = row["username"] if row else None
+            self.audit.record(
+                event_type="job.submit",
+                actor=actor,
+                session_id=session_id,
+                workspace=workspace or None,
+                action=f"job.submit:{capability}",
+                target=target or None,
+                payload={"job_id": job.id, "workflow": workflow or None},
+            )
         self.start()
         self._wake.set()
         return job

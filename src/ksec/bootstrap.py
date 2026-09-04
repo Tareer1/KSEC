@@ -109,7 +109,7 @@ def bootstrap(overrides: dict | None = None, run_migrations: bool = True) -> Kse
     rbac = RbacService(db)
     rbac.seed()
     audit = AuditService(db, config)
-    authz = AuthorizationService(db)
+    authz = AuthorizationService(db, audit)
     sessions = SessionManager(db, rbac, audit)
     policy = PolicyEngine(db, rbac, authz, config)
 
@@ -119,13 +119,13 @@ def bootstrap(overrides: dict | None = None, run_migrations: bool = True) -> Kse
     plugins = PluginManager(db, config, adapters, audit, bundled_dir=BUNDLED_PLUGINS_DIR)
     plugins.discover()  # validate + sync bundled/user plugin registry rows
     plugins.load_enabled()  # register trusted plugins' adapters/parsers
-    scheduler = Scheduler(db, config, adapters, plugin_manager=plugins)
+    scheduler = Scheduler(db, config, adapters, plugin_manager=plugins, audit=audit)
     scheduler.recover()
 
     assets = AssetService(db)
     findings = FindingService(db)
     evidence = EvidenceService(db)
-    cases = CaseService(db)
+    cases = CaseService(db, audit)
     correlation = CorrelationService(db, assets)
     workflows = WorkflowEngine(db, policy, scheduler, jobs, correlation=correlation)
     installer = ToolInstallManager(capabilities, audit)
@@ -137,7 +137,7 @@ def bootstrap(overrides: dict | None = None, run_migrations: bool = True) -> Kse
     notifications = NotificationService(db, providers=_provider_cfg)
     backups = BackupService(db, config, audit)
     workflow_store = WorkflowStore(db, capabilities=capabilities, adapters=adapters)
-    dfir = DfirService(db)
+    dfir = DfirService(db, audit)
     intel = ThreatIntelService(db)
     # Auto-register IOCs from every completed job's evidence.
     scheduler.intel_service = intel
@@ -150,7 +150,7 @@ def bootstrap(overrides: dict | None = None, run_migrations: bool = True) -> Kse
 
     soc_events = EventStore(db)
     soc_rules = RuleStore(db)
-    soc_alerts = AlertService(db)
+    soc_alerts = AlertService(db, audit)
     soc = SocPipeline(
         db,
         events=soc_events,

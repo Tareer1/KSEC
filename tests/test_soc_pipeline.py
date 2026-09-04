@@ -268,6 +268,43 @@ class SocCliTest(KsecTestCase):
         self.assertTrue(data["created"])
         self.assertEqual(data["normalized"]["ip"], "10.0.0.9")
 
+    def test_ingest_event_json_merges_cli_flags(self):
+        # Regression: CLI flags used to be silently dropped when
+        # --event-json was present, so the event failed intake.
+        buffer = io.StringIO()
+        with redirect_stdout(buffer):
+            code = cmd_soc_ingest(
+                self.ctx,
+                self._ingest_args(
+                    event_id="cli-json-1",
+                    source="firewall",
+                    event_type="auth_failure",
+                    severity="low",
+                    ip="203.0.113.9",
+                    username="root",
+                    event_json='{"src_port": 55123, "proto": "tcp"}',
+                ),
+            )
+        self.assertEqual(code, 0)
+        data = json.loads(buffer.getvalue())
+        self.assertTrue(data["created"])
+        self.assertEqual(data["normalized"]["ip"], "203.0.113.9")
+        self.assertEqual(data["normalized"]["username"], "root")
+
+    def test_soc_actions_recorded_in_audit(self):
+        report = self.ctx.soc.ingest(
+            {"event_id": "aud-soc", "event_type": "beacon", "severity": "high",
+             "ip": "203.0.113.7"}
+        )
+        alert_id = report["alert"]["id"]
+        self.ctx.soc_alerts.acknowledge(alert_id)
+        self.ctx.cases.close(report["case"]["id"])
+        types = [r["event_type"] for r in self.ctx.audit.list(limit=20)]
+        self.assertIn("alert.create", types)
+        self.assertIn("alert.acknowledged", types)
+        self.assertIn("case.create", types)
+        self.assertIn("case.status", types)
+
     def test_rule_add_cli(self):
         args = SimpleNamespace(
             name="cli-rule", description=None, event_type=None, field="ip",

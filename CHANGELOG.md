@@ -46,6 +46,24 @@ All notable changes are tracked here. Format follows
 - Case lifecycle closure exposed on the CLI (`ksec case close <id>`)
 - 286 unit tests + 165-step CLI smoke suite
 
+### Fixed — review round (spec 06 audit + error-path hardening)
+
+- DFIR: `dfir artifact add` / `dfir event add` against an unknown case
+  (or unknown evidence / artifact id) now fail with a clean
+  "Unknown case/evidence/artifact" error instead of a raw
+  `sqlite3.IntegrityError` traceback
+- SOC intake: `--event-json` no longer silently drops CLI flags
+  (`--event-id`, `--ip`, ...) — flags now fill keys missing from the JSON
+- Audit coverage (spec 06): alert create/ack/resolve, case create/add-finding/
+  status, and DFIR artifact/event actions now emit audit events, so SOC
+  triage → case closure is fully traceable in `ksec audit list`
+- Audit coverage for the core operational trail: engagement creation and
+  scope allow/deny changes (`authz.engagement.create`, `authz.scope.add`)
+  and every tool/job submission (`job.submit:<capability>`, actor + target +
+  session + workspace) now land in the audit log — previously only
+  `session.open` appeared while real tool execution ran unaudited
+- 294 unit tests + 165-step CLI smoke suite
+
 ## [0.1.0] - 2026-09-04
 
 ### Added — Foundation (spec Stages 1–5)

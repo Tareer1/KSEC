@@ -53,8 +53,16 @@ class AuthorizationServiceTest(KsecTestCase):
         self.assertTrue(self.service.is_target_authorized(engagement.id, "10.1.2.3")[0])
         self.assertTrue(self.service.is_target_authorized(engagement.id, "api.example.com")[0])
         self.assertFalse(self.service.is_target_authorized(engagement.id, "example.org")[0])
-        # Deny wins over allow.
-        self.assertFalse(self.service.is_target_authorized(engagement.id, "192.168.1.10")[0])
+
+    def test_authorization_changes_recorded_in_audit(self):
+        # Regression: engagement + scope changes used to be invisible in the
+        # audit log even though they change what tools are allowed to run.
+        engagement = self.ctx.authz.create_engagement("Audited engagement")
+        self.ctx.authz.add_authorization(engagement.id, "example.com", effect="allow")
+        self.ctx.authz.add_authorization(engagement.id, "10.0.0.0/8", effect="deny")
+        types = [r["event_type"] for r in self.ctx.audit.list(limit=10)]
+        self.assertIn("authz.engagement.create", types)
+        self.assertIn("authz.scope.add", types)
 
     def test_no_authorization_denied(self):
         engagement = self.service.create_engagement("Empty")

@@ -11,6 +11,7 @@ import sqlite3
 from dataclasses import dataclass
 from urllib.parse import urlsplit
 
+from ksec.audit.service import AuditService
 from ksec.core.errors import AuthorizationError
 from ksec.db.connection import Database
 from ksec.identity.users import now_utc
@@ -79,8 +80,17 @@ class Engagement:
 
 
 class AuthorizationService:
-    def __init__(self, db: Database):
+    def __init__(self, db: Database, audit: AuditService | None = None):
         self.db = db
+        self.audit = audit
+
+    def _actor_name(self, user_id: int | None) -> str | None:
+        if user_id is None:
+            return None
+        row = self.db.query_one(
+            "SELECT username FROM users WHERE id = ?", (user_id,)
+        )
+        return row["username"] if row else None
 
     def create_engagement(
         self, name: str, description: str = "", created_by: int | None = None
@@ -94,7 +104,16 @@ class AuthorizationService:
                 " VALUES (?, ?, 'open', ?, ?)",
                 (name.strip(), description, created, created_by),
             )
-        return self.get_engagement(cursor.lastrowid)
+        engagement = self.get_engagement(cursor.lastrowid)
+        assert engagement is not None
+        if self.audit:
+            self.audit.record(
+                event_type="authz.engagement.create",
+                actor=self._actor_name(created_by),
+                action="authz.engagement.create",
+                target=f"engagement:{engagement.id}:{engagement.name}",
+            )
+        return engagement
 
     def get_engagement(self, engagement_id: int) -> Engagement | None:
         row = self.db.query_one(
@@ -143,6 +162,14 @@ class AuthorizationService:
                 "INSERT INTO authorizations (engagement_id, target, action, effect, created_at,"
                 " created_by) VALUES (?, ?, ?, ?, ?, ?)",
                 (engagement_id, target.strip(), action, effect, now_utc(), created_by),
+            )
+        if self.audit:
+            self.audit.record(
+                event_type="authz.scope.add",
+                actor=self._actor_name(created_by),
+                action=f"authz.scope.add:{effect}",
+                target=f"engagement:{engagement_id}",
+                payload={"target": target.strip(), "action": action, "effect": effect},
             )
         return cursor.lastrowid
 

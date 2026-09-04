@@ -12,6 +12,7 @@ import sqlite3
 import uuid
 from dataclasses import dataclass
 
+from ksec.audit.service import AuditService
 from ksec.core.errors import KSECError
 from ksec.db.connection import Database
 from ksec.identity.users import now_utc
@@ -64,8 +65,9 @@ class Alert:
 
 
 class AlertService:
-    def __init__(self, db: Database):
+    def __init__(self, db: Database, audit: AuditService | None = None):
         self.db = db
+        self.audit = audit
 
     def create(
         self,
@@ -109,6 +111,14 @@ class AlertService:
             )
         alert = self.get(cursor.lastrowid)
         assert alert is not None
+        if self.audit:
+            self.audit.record(
+                event_type="alert.create",
+                workspace="BLUE_TEAM",
+                action="alert.create",
+                target=f"alert:{alert.id}",
+                outcome="success",
+            )
         return alert
 
     def get(self, alert_id: int) -> Alert | None:
@@ -161,6 +171,14 @@ class AlertService:
         )
         updated = self.get(alert_row_id)
         assert updated is not None
+        if self.audit:
+            self.audit.record(
+                event_type=f"alert.{status}",
+                workspace="BLUE_TEAM",
+                action=f"alert.{status}",
+                target=f"alert:{alert_row_id}",
+                outcome="success",
+            )
         return updated
 
     def acknowledge(self, alert_row_id: int) -> Alert:

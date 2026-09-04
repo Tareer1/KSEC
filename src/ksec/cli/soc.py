@@ -21,6 +21,27 @@ def cmd_soc_ingest(ctx: KsecContext, args) -> int:
         except json.JSONDecodeError as exc:
             emit(f"invalid --event-json: {exc}", args.json, args.quiet)
             return 1
+        # CLI flags fill any keys missing from the JSON payload instead of
+        # being silently dropped when the two are combined.
+        for key, value in {
+            "event_id": args.event_id,
+            "source": args.source,
+            "event_type": args.event_type,
+            "severity": args.severity,
+            "ip": args.ip or None,
+            "domain": args.domain or None,
+            "host": args.host or None,
+            "username": args.username or None,
+            "process": args.process or None,
+        }.items():
+            if value not in (None, "") and key not in raw:
+                raw[key] = value
+        if args.details_json:
+            try:
+                raw["details"] = json.loads(args.details_json)
+            except json.JSONDecodeError as exc:
+                emit(f"invalid --details-json: {exc}", args.json, args.quiet)
+                return 1
     else:
         raw = {
             "event_id": args.event_id,

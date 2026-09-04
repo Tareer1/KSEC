@@ -74,6 +74,39 @@ class DfirTest(KsecTestCase):
         with self.assertRaises(ValueError):
             self.ctx.dfir.add_event(self.case.id, "yesterday", "login")
 
+    def test_unknown_case_rejected_cleanly(self):
+        # Regression: these used to surface a raw sqlite3.IntegrityError.
+        with self.assertRaises(ValueError) as exc:
+            self.ctx.dfir.add_artifact(999, "probe", "log")
+        self.assertIn("Unknown case", str(exc.exception))
+        with self.assertRaises(ValueError) as exc:
+            self.ctx.dfir.add_event(999, "2026-09-04T09:00:00Z", "login")
+        self.assertIn("Unknown case", str(exc.exception))
+
+    def test_unknown_evidence_rejected(self):
+        with self.assertRaises(ValueError) as exc:
+            self.ctx.dfir.add_artifact(self.case.id, "probe", "log", evidence_id=999)
+        self.assertIn("Unknown evidence", str(exc.exception))
+
+    def test_unknown_artifact_rejected(self):
+        with self.assertRaises(ValueError) as exc:
+            self.ctx.dfir.add_event(
+                self.case.id, "2026-09-04T09:00:00Z", "login", artifact_id=999
+            )
+        self.assertIn("Unknown artifact", str(exc.exception))
+
+    def test_actions_recorded_in_audit(self):
+        before = self.ctx.audit.count()
+        self.ctx.dfir.add_artifact(self.case.id, "conn.log", "log")
+        self.ctx.dfir.add_event(self.case.id, "2026-09-04T09:00:00Z", "login")
+        types = [
+            r["event_type"]
+            for r in self.ctx.audit.list(limit=10)
+        ]
+        self.assertGreaterEqual(self.ctx.audit.count(), before + 2)
+        self.assertIn("dfir.artifact.add", types)
+        self.assertIn("dfir.event.add", types)
+
 
 if __name__ == "__main__":
     import unittest

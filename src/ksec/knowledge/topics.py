@@ -915,6 +915,7 @@ TOPICS: tuple[Topic, ...] = (
             ("cmd", "ksec run directory_brute lab-target.example --engagement 1 --user red"),
             ("cmd", "ksec run web_vuln_scan lab-target.example --engagement 1 --user red"),
             ("cmd", "ksec run wpscan lab-target.example --engagement 1 --user red"),
+            ("cmd", "ksec run cve_scan lab-target.example --engagement 1 --user red"),
             ("p", "STEP 3.5 — EXPLOIT INTELLIGENCE (real-world red team): map discovered software versions to known public exploits in the local Exploit-DB, and test real injection/access paths — all inside the authorized scope."),
             ("cmd", "ksec exploit search 'apache 2.4.49'"),
             ("cmd", "ksec exploit map 'apache 2.4.49' --engagement 1 --user red"),
@@ -1330,13 +1331,14 @@ TOPICS: tuple[Topic, ...] = (
             "target. Real SQLi/fuzzing/SMB-credential testing run through sqli_test, "
             "web_fuzz and smb_cred_test capabilities, always scope-gated."
         ),
-        keywords=("exploit", "exploit-db", "searchsploit", "cve", "edb", "zeroday", "zero day", "0-day", "sql injection", "sqlmap", "ffuf", "fuzz", "netexec", "nxc", "credential", "exploit search", "exploit lookup"),
+        keywords=("exploit", "exploit-db", "searchsploit", "cve", "edb", "zeroday", "zero day", "0-day", "sql injection", "sqlmap", "ffuf", "fuzz", "netexec", "nxc", "nuclei", "template", "credential", "exploit search", "exploit lookup", "cve scan"),
         sections=(
             ("p", "searchsploit queries the local exploitdb database installed on Kali. This is exactly how professional red teams learn whether a discovered version has a public exploit — no target interaction, fully legal, and the same data real attackers use."),
             ("cmd", "ksec exploit search 'apache 2.4.49'"),
             ("cmd", "ksec exploit search CVE-2021-41773"),
             ("cmd", "ksec exploit map 'apache 2.4.49' --engagement 1 --user red"),
             ("cmd", "ksec run exploit_search 'apache 2.4.49' --engagement 1 --user red"),
+            ("cmd", "ksec run cve_scan http://lab.local --engagement 1 --user red"),
             ("cmd", "ksec run sqli_test http://lab.local --engagement 1 --user red"),
             ("cmd", "ksec run web_fuzz http://lab.local --engagement 1 --user red"),
             ("cmd", "ksec run smb_cred_test lab.local --engagement 1 --user red"),

@@ -556,6 +556,8 @@ run_ok "help: exploit" "${BIN[@]}" exploit --help
 # new offensive capabilities are scope-gated and registered
 run_grep "tools capabilities shows exploit_search" 'exploit_search' "${BIN[@]}" tools capabilities
 run_grep "tools capabilities shows sqli_test" 'sqli_test' "${BIN[@]}" tools capabilities
+run_grep "tools capabilities shows cve_scan (nuclei)" 'cve_scan' "${BIN[@]}" tools capabilities
+run_ok "cve_scan dry-run" "${BIN[@]}" run cve_scan example.com --engagement 1 --user "$ADMIN" --password "$APW" --dry-run
 run_ok "exploit_lookup workflow dry-run" "${BIN[@]}" run exploit_lookup example.com --engagement 1 --user "$ADMIN" --password "$APW" --dry-run
 run_ok "sqli_test dry-run" "${BIN[@]}" run sqli_test example.com --engagement 1 --user "$ADMIN" --password "$APW" --dry-run
 run_ok "web_fuzz dry-run" "${BIN[@]}" run web_fuzz example.com --engagement 1 --user "$ADMIN" --password "$APW" --dry-run

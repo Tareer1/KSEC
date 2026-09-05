@@ -78,11 +78,12 @@ WORKFLOWS: dict[str, WorkflowDefinition] = {
     ),
     "web": WorkflowDefinition(
         name="web",
-        description="Web application authorized assessment: fingerprint, probe, TLS, vulns.",
+        description="Web application authorized assessment: fingerprint, probe, TLS, CVE scan, vulns.",
         steps=(
             WorkflowStep("web_fingerprint"),
             WorkflowStep("http_probe"),
             WorkflowStep("tls_scan"),
+            WorkflowStep("cve_scan"),
             WorkflowStep("web_vuln_scan"),
             WorkflowStep("directory_brute"),
         ),

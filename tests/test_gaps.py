@@ -1262,3 +1262,63 @@ class ExploitIntelligenceTest(KsecTestCase):
         findings = self.ctx.findings.list(engagement_id=eng.id)
         self.assertEqual(len(findings), 1)
         self.assertIn("EDB-42", findings[0].title)
+
+
+class NucleiCveScanTest(KsecTestCase):
+    """nuclei template-based CVE scanning (capability: cve_scan)."""
+
+    def setUp(self):
+        super().setUp()
+        self.ctx = self.make_context()
+
+    def tearDown(self):
+        self.ctx.close()
+        super().tearDown()
+
+    def test_cve_scan_registered(self):
+        self.assertIsNotNone(self.ctx.adapters.get("cve_scan"))
+        known = self.ctx.workflow_store.known_capabilities()
+        self.assertIn("cve_scan", known)
+        found = {t.capability for t in self.ctx.capabilities.definitions()}
+        self.assertIn("cve_scan", found)
+
+    def test_adapter_builds_command(self):
+        from ksec.adapters.base import CommandRequest
+
+        adapter = self.ctx.adapters.get("cve_scan")
+        cmd = adapter.build_command(
+            CommandRequest(
+                capability="cve_scan", target="example.com",
+                options={"severity": "high,critical", "rate_limit": 5},
+            )
+        )
+        self.assertEqual(cmd[0], "nuclei")
+        self.assertIn("-jsonl", cmd)
+        self.assertIn("-severity", cmd)
+        joined = " ".join(cmd)
+        self.assertIn("http://example.com", joined)
+
+    def test_parser_extracts_cve_matches(self):
+        from ksec.parsers.nuclei import NucleiParser
+
+        output = (
+            '{"template-id": "cves/2021/CVE-2021-41773", "info": {"name": "Apache 2.4.49 RCE",'
+            ' "severity": "critical", "tags": ["apache", "cve"], "classification":'
+            ' {"cve-id": ["CVE-2021-41773"], "exploit-db": ["50383"]}},'
+            ' "matched-at": "http://example.com/cgi-bin", "matcher-name": "path-traversal"}\n'
+            '[INF] nuclei engine started\n'
+            '{"template-id": "exposures/configs/aws-keys", "info": {"name": "AWS key exposure",'
+            ' "severity": "high"}}\n'
+        )
+        result = NucleiParser().parse(output)
+        self.assertEqual(len(result.entities), 2)  # engine line skipped
+        first = result.entities[0]
+        self.assertEqual(first["type"], "cve_finding")
+        self.assertIn("CVE-2021-41773", first["cve"])
+        self.assertEqual(first["severity"], "critical")
+        self.assertEqual(first["edb_id"], "50383")
+
+    def test_web_workflow_includes_cve_scan(self):
+        definition = self.ctx.workflow_store.resolve("web")
+        caps = [s.capability for s in definition.steps]
+        self.assertIn("cve_scan", caps)

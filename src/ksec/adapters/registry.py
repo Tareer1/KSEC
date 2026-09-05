@@ -16,6 +16,7 @@ from ksec.adapters.gobuster import GobusterAdapter
 from ksec.adapters.hydra import HydraAdapter
 from ksec.adapters.nikto import NiktoAdapter
 from ksec.adapters.nmap import NmapAdapter
+from ksec.adapters.nuclei import NucleiAdapter
 from ksec.adapters.nxc import NxcAdapter
 from ksec.adapters.null import NullAdapter
 from ksec.adapters.searchsploit import SearchsploitAdapter
@@ -34,6 +35,7 @@ _BUILTIN_ADAPTERS: tuple[ToolAdapter, ...] = (
     GobusterAdapter(),
     FfufAdapter(),
     NiktoAdapter(),
+    NucleiAdapter(),
     DnsreconAdapter(),
     WpscanAdapter(),
     HydraAdapter(),

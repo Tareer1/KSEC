@@ -1259,6 +1259,7 @@ python3 -m ksec run exploit_search "apache 2.4.49" --engagement 1 --user red
 python3 -m ksec run exploit_lookup example.com --engagement 1 --user red
 
 # Real offensive testing, always scope-gated
+python3 -m ksec run cve_scan http://lab.local --engagement 1 --user red
 python3 -m ksec run sqli_test http://lab.local --engagement 1 --user red
 python3 -m ksec run web_fuzz http://lab.local --engagement 1 --user red
 python3 -m ksec run smb_cred_test lab.local --engagement 1 --user red
@@ -1270,7 +1271,10 @@ python3 -m ksec run smb_cred_test lab.local --engagement 1 --user red
   carrying the EDB-ID and CVE codes.
 - New capabilities: `exploit_search` (searchsploit), `sqli_test`
   (sqlmap — batch, conservative level/risk), `web_fuzz` (ffuf),
-  `smb_cred_test` (nxc). All run through the normal authorization gate.
+  `smb_cred_test` (nxc) and `cve_scan` (nuclei — template-based CVE
+  scanner, 7000+ templates, JSONL output, rate-limited). The `web`
+  workflow now includes `cve_scan`. All run through the normal
+  authorization gate.
 - **Boundary (by design):** real exploitation of unknown/unpatched
   vulnerabilities (zero-day weaponization, payloads, meterpreter) is not
   part of KSEC — it stays an authorized testing platform.

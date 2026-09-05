@@ -15,6 +15,7 @@ from ksec.parsers.http_probe import HttpProbeParser
 from ksec.parsers.hydra import HydraParser
 from ksec.parsers.nikto import NiktoParser
 from ksec.parsers.nmap_xml import NmapXmlParser
+from ksec.parsers.nuclei import NucleiParser
 from ksec.parsers.nxc import NxcParser
 from ksec.parsers.searchsploit import SearchsploitParser
 from ksec.parsers.smb import Enum4LinuxParser, SmbMapParser
@@ -36,6 +37,7 @@ _PARSERS: dict[str, OutputParser] = {
     SearchsploitParser().name: SearchsploitParser(),
     SqlmapParser().name: SqlmapParser(),
     NxcParser().name: NxcParser(),
+    NucleiParser().name: NucleiParser(),
     DnsreconParser().name: DnsreconParser(),
     WpscanParser().name: WpscanParser(),
     HydraParser().name: HydraParser(),
@@ -56,6 +58,7 @@ _ALIASES: dict[str, str] = {
     "searchsploit": "searchsploit",
     "sqlmap": "sqlmap",
     "nxc": "nxc",
+    "nuclei": "nuclei",
     "nikto": "nikto",
     "dnsrecon": "dnsrecon",
     "wpscan": "wpscan",

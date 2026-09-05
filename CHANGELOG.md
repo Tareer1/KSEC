@@ -20,8 +20,10 @@ All notable changes are tracked here. Format follows
   auto-creates findings for verified exploits (EDB-ID + CVE in the
   finding). New scope-gated offensive capabilities with adapters,
   parsers and catalog entries: `sqli_test` (sqlmap — batch, conservative),
-  `web_fuzz` (ffuf), `smb_cred_test` (nxc) and the `exploit_lookup`
-  workflow. Every job still passes the normal authorization gate.
+  `web_fuzz` (ffuf), `smb_cred_test` (nxc), `cve_scan` (nuclei —
+  template-based CVE scanner, 7000+ templates, JSONL, rate-limited; the
+  `web` workflow now includes it) and the `exploit_lookup` workflow.
+  Every job still passes the normal authorization gate.
   Boundary stays intact by design: no weaponized payloads/zero-day
   exploitation — KSEC remains an authorized testing platform.
 

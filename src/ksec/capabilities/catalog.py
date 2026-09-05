@@ -25,7 +25,7 @@ TOOLS: list[ToolDefinition] = [
     ToolDefinition("dig", "dnsutils", "recon", "dns_lookup", "DNS lookup utility", "dig"),
     ToolDefinition("whois", "whois", "recon", "whois_lookup", "Domain registration intelligence", "whois"),
     ToolDefinition("subfinder", "subfinder", "recon", "subdomain_enum", "Passive subdomain discovery", "subfinder"),
-    ToolDefinition("nuclei", "nuclei", "web", "web_vuln_scan", "Fast vulnerability scanner for web applications", "nuclei"),
+    ToolDefinition("nuclei", "nuclei", "web", "cve_scan", "Template-based CVE/vulnerability scanner (7000+ templates)", "nuclei"),
     ToolDefinition("nikto", "nikto", "web", "web_vuln_scan", "Web server vulnerability scanner", "nikto"),
     ToolDefinition("gobuster", "gobuster", "web", "directory_brute", "Directory/file brute-forcing", "gobuster"),
     ToolDefinition("sslscan", "sslscan", "web", "tls_scan", "TLS/SSL protocol and cipher enumeration", "sslscan"),
@@ -69,6 +69,7 @@ CAPABILITY_PERMISSION: dict[str, str] = {
     "sqli_test": "assess.run",
     "web_fuzz": "assess.run",
     "smb_cred_test": "assess.run",
+    "cve_scan": "assess.run",
 }
 
 

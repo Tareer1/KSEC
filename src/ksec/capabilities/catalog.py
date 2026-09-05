@@ -48,6 +48,9 @@ TOOLS: list[ToolDefinition] = [
     ToolDefinition("dnsenum", "dnsenum", "recon", "dns_enum", "DNS record and zone enumeration", "dnsenum"),
     ToolDefinition("iwlist", "wireless-tools", "wireless", "wifi_scan", "Wireless access-point scanning", "iwlist"),
     ToolDefinition("aircrack-ng", "aircrack-ng", "wireless", "wifi_crack", "WPA/WEP key recovery from captured handshakes", "aircrack-ng"),
+    ToolDefinition("snmpwalk", "snmp", "network", "snmp_enum", "SNMP MIB tree enumeration", "snmpwalk"),
+    ToolDefinition("onesixtyone", "snmp", "network", "snmp_enum", "SNMP community-string discovery", "onesixtyone"),
+    ToolDefinition("smtp-user-enum", "smtp-user-enum", "network", "smtp_enum", "SMTP user enumeration (VRFY/RCPT/EXPN)", "smtp-user-enum"),
 ]
 
 # Capability -> permission required to run it (RBAC boundary).
@@ -77,6 +80,11 @@ CAPABILITY_PERMISSION: dict[str, str] = {
     "cve_scan": "assess.run",
     "wifi_scan": "assess.run",
     "wifi_crack": "assess.run",
+    "whois_lookup": "recon.run",
+    "traceroute": "recon.run",
+    "snmp_enum": "recon.run",
+    "password_crack": "assess.run",
+    "smtp_enum": "assess.run",
 }
 
 

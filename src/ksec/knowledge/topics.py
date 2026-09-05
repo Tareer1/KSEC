@@ -1404,6 +1404,28 @@ TOPICS: tuple[Topic, ...] = (
         ),
     ),
     Topic(
+        id="service-enumeration",
+        title="Service enumeration: snmp_enum + smtp_enum + whois",
+        kind="module",
+        audience=("red", "blue", "all"),
+        summary=(
+            "Network/service recon capabilities: whois_lookup (domain registration), "
+            "traceroute (path discovery), snmp_enum (snmpwalk MIB tree / onesixtyone "
+            "community discovery) and smtp_enum (smtp-user-enum VRFY/RCPT/EXPN user "
+            "enumeration). All scope-gated like every capability."
+        ),
+        keywords=("whois", "traceroute", "snmp", "snmpwalk", "onesixtyone", "smtp", "smtp-user-enum", "vrfy", "rcpt", "john", "hash", "password crack", "enumerate", "service enum", "user enum"),
+        sections=(
+            ("p", "ksec run whois_lookup <domain> pulls registration data; traceroute maps the network path; snmp_enum walks the MIB tree of an SNMP-enabled device (or brute-forces community strings with onesixtyone); smtp_enum checks which usernames exist on a mail server. password_crack runs john offline against operator-owned hash files."),
+            ("cmd", "ksec run whois_lookup example.com --engagement 1 --user red"),
+            ("cmd", "ksec run snmp_enum 10.0.0.1 --engagement 1 --user red"),
+            ("cmd", "ksec run snmp_enum 10.0.0.1 --engagement 1 --user red --options '{\"tool\": \"onesixtyone\"}'"),
+            ("cmd", "ksec run smtp_enum mail.example.com --engagement 1 --user red"),
+            ("cmd", "ksec run enumerate example.com --engagement 1 --user red --dry-run"),
+            ("tip", "SNMP community strings and SMTP VRFY are classic unauthenticated leaks on legacy networks — but they are still active probing, so the target must be inside an authorized engagement."),
+        ),
+    ),
+    Topic(
         id="ask-how",
         title="Using ksec ask — the in-tool mentor",
         kind="workflow",
@@ -1463,6 +1485,12 @@ ALIASES: dict[str, str] = {
     "amass": "alternate-tools",
     "wfuzz": "alternate-tools",
     "dnsenum": "alternate-tools",
+    "whois": "service-enumeration",
+    "traceroute": "service-enumeration",
+    "snmp": "service-enumeration",
+    "snmpwalk": "service-enumeration",
+    "smtp": "service-enumeration",
+    "john": "service-enumeration",
     "searchsploit": "exploit-intelligence",
     "cve": "exploit-intelligence",
     "sql injection": "exploit-intelligence",

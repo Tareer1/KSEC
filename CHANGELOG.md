@@ -3,6 +3,31 @@
 All notable changes are tracked here. Format follows
 [Keep a Changelog](https://keepachangelog.com/) and semantic versioning.
 
+## [0.6.0] - 2026-09-05 — full catalog runnable + service enumeration
+
+### Added
+
+- **Last dead capabilities wired**: `whois_lookup` (whois adapter/parser),
+  `traceroute` (traceroute adapter/parser) and `password_crack` (john
+  adapter/parser — offline hash cracking of operator-owned files with
+  wordlist + format options) now have real adapters, so every tool in the
+  catalog runs through the policy gate (`ksec run whois_lookup example.com`
+  etc. resolve as single-capability workflows).
+- **Service enumeration**: `snmp_enum` capability with snmpwalk (MIB tree,
+  numeric OID, v2c community) as preferred provider and onesixtyone
+  (community-string discovery) as alternate via `options.tool`; `smtp_enum`
+  capability via smtp-user-enum (VRFY/RCPT/EXPN with a username list). New
+  `enumerate` workflow (snmp + smtp) and catalog entries.
+- **Module mapping fix**: the wireless module now advertises the real
+  `wifi_scan`/`wifi_crack` capabilities (was the stale `wireless_scan`) and
+  lists iwlist/aircrack-ng among its tools.
+- Catalog grows to 31 tools / 27 adapter capabilities; `ksec run` can now
+  resolve whois_lookup, traceroute, password_crack, snmp_enum and smtp_enum.
+
+### Verified
+
+- 514 unit tests + 383-check CLI smoke suite + QA gate all green.
+
 ## [0.5.0] - 2026-09-05 — alternate-tool dispatch, wireless + DOCX round
 
 ### Added

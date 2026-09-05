@@ -639,6 +639,21 @@ run_ok "report export docx" "${BIN[@]}" report export 1 --format docx --out "$KS
 run_ok "role blackhat mentions wifi" "${BIN[@]}" role blackhat
 run_ok "ask routes to wireless" "${BIN[@]}" ask "wireless kya hai"
 
+say "40. service enumeration: whois/traceroute/john/snmp/smtp"
+run_grep "tools capabilities shows whois_lookup" 'whois_lookup' "${BIN[@]}" tools capabilities
+run_grep "tools capabilities shows traceroute" 'traceroute' "${BIN[@]}" tools capabilities
+run_grep "tools capabilities shows password_crack" 'password_crack' "${BIN[@]}" tools capabilities
+run_grep "tools capabilities shows snmp_enum" 'snmp_enum' "${BIN[@]}" tools capabilities
+run_grep "tools capabilities shows smtp_enum" 'smtp_enum' "${BIN[@]}" tools capabilities
+run_ok "enumerate workflow dry-run (snmp+smtp)" "${BIN[@]}" run enumerate example.com --engagement 1 --user "$ADMIN" --password "$APW" --dry-run
+run_ok "whois_lookup live on example.com" "${BIN[@]}" run whois_lookup example.com --engagement 1 --user "$ADMIN" --password "$APW"
+run_ok "whois_lookup dry-run" "${BIN[@]}" run whois_lookup example.com --engagement 1 --user "$ADMIN" --password "$APW" --dry-run
+run_ok "traceroute dry-run" "${BIN[@]}" run traceroute example.com --engagement 1 --user "$ADMIN" --password "$APW" --dry-run
+run_ok "password_crack dry-run" "${BIN[@]}" run password_crack example.com --engagement 1 --user "$ADMIN" --password "$APW" --dry-run
+run_ok "snmp_enum dry-run" "${BIN[@]}" run snmp_enum example.com --engagement 1 --user "$ADMIN" --password "$APW" --dry-run
+run_ok "smtp_enum dry-run" "${BIN[@]}" run smtp_enum example.com --engagement 1 --user "$ADMIN" --password "$APW" --dry-run
+run_grep "module info wireless shows aircrack" 'aircrack' "${BIN[@]}" module info wireless
+
 # ---------------------------------------------------------------------------
 echo
 echo "=========================================="

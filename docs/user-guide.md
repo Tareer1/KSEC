@@ -1445,6 +1445,36 @@ python3 -m ksec adversary profile add --name apt-x --technique T1505.003 --techn
 python3 -m ksec adversary coverage
 ```
 
+## 28.23 Service enumeration + full catalog runnable
+
+Every tool in the catalog now runs through the policy gate. New capabilities:
+
+```bash
+# Domain registration intelligence (whois)
+python3 -m ksec run whois_lookup example.com --engagement 1 --user red
+
+# Network path discovery
+python3 -m ksec run traceroute example.com --engagement 1 --user red
+
+# Offline hash cracking (operator-owned hash files only)
+python3 -m ksec run password_crack /labs/hashes.txt --engagement 1 --user red \
+  --options '{"wordlist": "/usr/share/wordlists/rockyou.txt"}'
+
+# SNMP enumeration (community + OID via options)
+python3 -m ksec run snmp_enum 10.0.0.1 --engagement 1 --user red \
+  --options '{"community": "public", "oid": "1.3.6.1.2.1.1"}'
+
+# SNMP community discovery with onesixtyone (alternate provider)
+python3 -m ksec run snmp_enum 10.0.0.1 --engagement 1 --user red \
+  --options '{"tool": "onesixtyone"}'
+
+# SMTP user enumeration (VRFY/RCPT/EXPN)
+python3 -m ksec run smtp_enum mail.example.com --engagement 1 --user red
+
+# One-step enumerate workflow (snmp + smtp)
+python3 -m ksec run enumerate example.com --engagement 1 --user red --dry-run
+```
+
 ## 28. Tips and troubleshooting
 
 **"Target not authorized for ..." / REQUIRE_AUTHORIZATION**

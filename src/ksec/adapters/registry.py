@@ -23,8 +23,12 @@ from ksec.adapters.ffuf import FfufAdapter
 from ksec.adapters.gobuster import GobusterAdapter
 from ksec.adapters.hydra import HydraAdapter
 from ksec.adapters.iwlist import IwlistAdapter
+from ksec.adapters.john import JohnAdapter
 from ksec.adapters.masscan import MasscanAdapter
 from ksec.adapters.nikto import NiktoAdapter
+from ksec.adapters.onesixtyone import OnesixyoneAdapter
+from ksec.adapters.smtp_enum import SmtpUserEnumAdapter
+from ksec.adapters.snmpwalk import SnmpwalkAdapter
 from ksec.adapters.nmap import NmapAdapter
 from ksec.adapters.nuclei import NucleiAdapter
 from ksec.adapters.nxc import NxcAdapter
@@ -34,7 +38,9 @@ from ksec.adapters.smbmap import SmbMapAdapter
 from ksec.adapters.sqlmap import SqlmapAdapter
 from ksec.adapters.sslscan import SslScanAdapter
 from ksec.adapters.theharvester import TheHarvesterAdapter
+from ksec.adapters.traceroute import TracerouteAdapter
 from ksec.adapters.wfuzz import WfuzzAdapter
+from ksec.adapters.whois import WhoisAdapter
 from ksec.adapters.whatweb import WhatwebAdapter
 from ksec.adapters.wpscan import WpscanAdapter
 
@@ -61,6 +67,12 @@ _BUILTIN_ADAPTERS: tuple[ToolAdapter, ...] = (
     WhatwebAdapter(),
     TheHarvesterAdapter(),
     AmassAdapter(),
+    WhoisAdapter(),
+    TracerouteAdapter(),
+    JohnAdapter(),
+    SnmpwalkAdapter(),
+    OnesixyoneAdapter(),
+    SmtpUserEnumAdapter(),
     IwlistAdapter(),
     AircrackNgAdapter(),
     NullAdapter(),

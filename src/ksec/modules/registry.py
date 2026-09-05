@@ -52,8 +52,8 @@ MODULES: tuple[ModuleDefinition, ...] = (
         "Wireless Security",
         "802.11 discovery and audit: interface inventory, monitor-mode "
         "readiness and rogue/evil-twin detection tooling (spec 08 #24).",
-        ("wireless_scan",),
-        ("airmon-ng", "airodump-ng", "aireplay-ng", "wash", "kismet"),
+        ("wifi_scan", "wifi_crack"),
+        ("airmon-ng", "airodump-ng", "aireplay-ng", "wash", "kismet", "iwlist", "aircrack-ng"),
         ("red", "blue"),
     ),
     ModuleDefinition(

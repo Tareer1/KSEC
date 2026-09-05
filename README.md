@@ -117,14 +117,16 @@ Implemented so far (spec Stages 1–9 core, interfaces included):
 - [x] **Wireless capabilities**: `wifi_scan` (iwlist — AP discovery: BSSID/ESSID/channel/encryption) and `wifi_crack` (aircrack-ng — WPA/WEP key recovery from captured handshakes), both scope-gated like every capability
 - [x] **DOCX report export**: `report create --format docx` and `report export <id> --format docx` write a real editable Word document — pure stdlib (zipfile/XML), zero dependencies
 - [x] **Extended ATT&CK coverage**: adversary/atomic exercises now map 21 techniques across all 14 kill-chain phases (adds T1505.003, T1078, T1003, T1213, T1041, T1485)
+- [x] **Full catalog runnable**: whois_lookup, traceroute and password_crack (john — offline hash cracking) gained real adapters, closing the last "listed but not runnable" gap; every catalog tool now runs through the policy gate
+- [x] **Service enumeration**: `snmp_enum` (snmpwalk + onesixtyone community discovery) and `smtp_enum` (smtp-user-enum VRFY/RCPT/EXPN) capabilities + the `enumerate` workflow
 - [x] CLI: `init status doctor version config env tools session engagement
       assess job asset finding evidence case report learn workflow dfir intel
       plugin adversary vuln atomic soc siem run backup tui dashboard ask role api
       stop db export grc malware endpoint mode module purple change history graph`
-- [x] 504 unit tests (stdlib unittest, no dependencies) + 370-check CLI smoke suite
+- [x] 514 unit tests (stdlib unittest, no dependencies) + 383-check CLI smoke suite
   (`python3 -m unittest discover -s tests` / `bash scripts/smoke.sh`)
 - [x] Migrations `001`–`015`
-- [x] **v0.5.0** — changelog in `CHANGELOG.md`; docs in [`docs/`](docs/README.md)
+- [x] **v0.6.0** — changelog in `CHANGELOG.md`; docs in [`docs/`](docs/README.md)
 
 ## Requirements
 

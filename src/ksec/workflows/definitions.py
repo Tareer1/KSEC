@@ -136,6 +136,14 @@ WORKFLOWS: dict[str, WorkflowDefinition] = {
             WorkflowStep("port_scan", {"tool": "masscan", "rate": 1000, "ports": "1-1024"}),
         ),
     ),
+    "enumerate": WorkflowDefinition(
+        name="enumerate",
+        description="Service enumeration on an authorized host: SNMP + SMTP users.",
+        steps=(
+            WorkflowStep("snmp_enum", {"community": "public", "oid": "1.3.6.1.2.1.1"}),
+            WorkflowStep("smtp_enum", {"mode": "VRFY"}),
+        ),
+    ),
 }
 
 

@@ -17,8 +17,12 @@ from ksec.parsers.gobuster import GobusterParser
 from ksec.parsers.http_probe import HttpProbeParser
 from ksec.parsers.hydra import HydraParser
 from ksec.parsers.iwlist import IwlistParser
+from ksec.parsers.john import JohnParser
 from ksec.parsers.masscan import MasscanJsonParser
 from ksec.parsers.nikto import NiktoParser
+from ksec.parsers.onesixtyone import OnesixyoneParser
+from ksec.parsers.smtp_enum import SmtpUserEnumParser
+from ksec.parsers.snmpwalk import SnmpwalkParser
 from ksec.parsers.nmap_xml import NmapXmlParser
 from ksec.parsers.nuclei import NucleiParser
 from ksec.parsers.nxc import NxcParser
@@ -27,8 +31,10 @@ from ksec.parsers.smb import Enum4LinuxParser, SmbMapParser
 from ksec.parsers.sqlmap import SqlmapParser
 from ksec.parsers.theharvester import TheHarvesterParser
 from ksec.parsers.tls_scan import TlsScanParser
+from ksec.parsers.traceroute import TracerouteParser
 from ksec.parsers.wfuzz import WfuzzParser
 from ksec.parsers.whatweb import WhatwebParser
+from ksec.parsers.whois import WhoisParser
 from ksec.parsers.wpscan import WpscanParser
 
 # Canonical entries keyed by the parser's own name.
@@ -55,6 +61,12 @@ _PARSERS: dict[str, OutputParser] = {
     WhatwebParser().name: WhatwebParser(),
     TheHarvesterParser().name: TheHarvesterParser(),
     AmassParser().name: AmassParser(),
+    WhoisParser().name: WhoisParser(),
+    TracerouteParser().name: TracerouteParser(),
+    JohnParser().name: JohnParser(),
+    SnmpwalkParser().name: SnmpwalkParser(),
+    OnesixyoneParser().name: OnesixyoneParser(),
+    SmtpUserEnumParser().name: SmtpUserEnumParser(),
     IwlistParser().name: IwlistParser(),
     AircrackNgParser().name: AircrackNgParser(),
 }
@@ -83,6 +95,12 @@ _ALIASES: dict[str, str] = {
     "whatweb": "whatweb",
     "theharvester": "theharvester",
     "amass": "amass",
+    "whois": "whois",
+    "traceroute": "traceroute",
+    "john": "john",
+    "snmpwalk": "snmpwalk",
+    "onesixtyone": "onesixtyone",
+    "smtp-user-enum": "smtp_enum",
     "iwlist": "iwlist",
     "aircrack-ng": "aircrack_ng",
 }

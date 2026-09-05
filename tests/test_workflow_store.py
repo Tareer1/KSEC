@@ -75,10 +75,18 @@ class WorkflowStoreTest(KsecTestCase):
         self.store.update("flow", enabled=False)
         self.assertIsNone(self.store.resolve("flow"))
 
-    def test_validate_reports_no_adapter_capability(self):
-        errors = self.store.validate_steps([{"capability": "whois_lookup"}])
+    def test_validate_reports_unknown_capability(self):
+        errors = self.store.validate_steps([{"capability": "no_such_capability"}])
         self.assertTrue(errors)
-        self.assertTrue(any("no adapter" in e for e in errors))
+        self.assertTrue(any("unknown capability" in e for e in errors))
+
+    def test_newly_wired_capabilities_validate_clean(self):
+        """whois_lookup/traceroute/password_crack now have real adapters."""
+        for capability in ("whois_lookup", "traceroute", "password_crack",
+                           "snmp_enum", "smtp_enum"):
+            self.assertEqual(
+                self.store.validate_steps([{"capability": capability}]), []
+            )
 
 
 class CustomWorkflowExecutionTest(KsecTestCase):

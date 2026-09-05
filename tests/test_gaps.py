@@ -1526,3 +1526,122 @@ class DocxReportExportTest(KsecTestCase):
         caps = {t.capability for t in TOOLS}
         self.assertIn("wifi_scan", caps)
         self.assertIn("wifi_crack", caps)
+
+
+class ServiceEnumerationAdaptersTest(KsecTestCase):
+    """whois/traceroute/john/snmpwalk/onesixtyone/smtp-user-enum adapters."""
+
+    def setUp(self):
+        super().setUp()
+        self.ctx = self.make_context()
+
+    def tearDown(self):
+        self.ctx.close()
+        super().tearDown()
+
+    def test_all_five_gap_capabilities_registered(self):
+        reg = self.ctx.adapters
+        for cap in ("whois_lookup", "traceroute", "password_crack", "snmp_enum", "smtp_enum"):
+            self.assertIsNotNone(reg.get(cap), cap)
+
+    def test_whois_build_and_parse(self):
+        from ksec.adapters.base import CommandRequest
+
+        adapter = self.ctx.adapters.get("whois_lookup")
+        self.assertEqual(adapter.build_command(CommandRequest("whois_lookup", "example.com")),
+                         ["whois", "example.com"])
+        parsed = adapter.parse_output(
+            "   Domain Name: EXAMPLE.COM\n   Creation Date: 1995-08-14T04:00:00Z\n"
+            "   Name Server: NS1.EXAMPLE.COM\n"
+        )
+        self.assertEqual(parsed.entities[0]["domain"], "example.com")
+        self.assertEqual(parsed.entities[0]["name_servers"], ["ns1.example.com"])
+
+    def test_traceroute_build_and_parse(self):
+        from ksec.adapters.base import CommandRequest
+
+        adapter = self.ctx.adapters.get("traceroute")
+        cmd = adapter.build_command(
+            CommandRequest("traceroute", "example.com", {"max_hops": 10})
+        )
+        self.assertEqual(cmd[:3], ["traceroute", "-m", "10"])
+        parsed = adapter.parse_output(
+            " 1  192.168.100.1 (192.168.100.1)  2.230 ms\n 2  100.127.32.1 (100.127.32.1)  14.8 ms\n"
+        )
+        self.assertEqual(len(parsed.entities), 2)
+        self.assertEqual(parsed.entities[0]["hop"], 1)
+        self.assertEqual(parsed.entities[0]["ip"], "192.168.100.1")
+
+    def test_john_build_and_parse(self):
+        from ksec.adapters.base import CommandRequest
+
+        adapter = self.ctx.adapters.get("password_crack")
+        cmd = adapter.build_command(
+            CommandRequest("password_crack", "/tmp/hashes.txt", {"wordlist": "/tmp/wl.txt"})
+        )
+        self.assertEqual(cmd[0], "john")
+        self.assertIn("--wordlist=/tmp/wl.txt", cmd)
+        parsed = adapter.parse_output("secret123       (admin)\npassword1       (root)\n")
+        self.assertEqual(len(parsed.entities), 2)
+        self.assertEqual(parsed.entities[0]["username"], "admin")
+        self.assertEqual(parsed.entities[0]["password"], "secret123")
+        self.assertEqual(parsed.entities[0]["status"], "cracked")
+
+    def test_snmpwalk_build_and_parse(self):
+        from ksec.adapters.base import CommandRequest
+
+        adapter = self.ctx.adapters.get("snmp_enum")
+        cmd = adapter.build_command(CommandRequest("snmp_enum", "10.0.0.1"))
+        self.assertEqual(cmd[0], "snmpwalk")
+        self.assertIn("public", cmd)
+        parsed = adapter.parse_output(
+            ".1.3.6.1.2.1.1.1.0 = STRING: Linux demo 5.15.0\n"
+            ".1.3.6.1.2.1.1.5.0 = STRING: router01\n"
+        )
+        self.assertEqual(len(parsed.entities), 2)
+        self.assertEqual(parsed.entities[0]["value"], "Linux demo 5.15.0")
+
+    def test_onesixtyone_alternate_for_snmp(self):
+        from ksec.adapters.base import CommandRequest
+
+        adapter = self.ctx.adapters.get("snmp_enum", tool="onesixtyone")
+        self.assertEqual(adapter.name, "onesixtyone")
+        cmd = adapter.build_command(CommandRequest("snmp_enum", "10.0.0.1"))
+        self.assertEqual(cmd[0], "onesixtyone")
+        parsed = adapter.parse_output("10.0.0.1 [public] Linux test 5.4.0\n")
+        self.assertEqual(parsed.entities[0]["ip"], "10.0.0.1")
+        self.assertEqual(parsed.entities[0]["community"], "public")
+
+    def test_smtp_enum_build_and_parse(self):
+        from ksec.adapters.base import CommandRequest
+
+        adapter = self.ctx.adapters.get("smtp_enum")
+        cmd = adapter.build_command(
+            CommandRequest("smtp_enum", "10.0.0.1", {"mode": "VRFY"})
+        )
+        self.assertEqual(cmd[0], "smtp-user-enum")
+        self.assertIn("VRFY", cmd)
+        parsed = adapter.parse_output(
+            "10.0.0.1: root exists\n10.0.0.1: jdoe does not exist\n"
+        )
+        self.assertEqual(len(parsed.entities), 2)
+        self.assertEqual(parsed.entities[0]["status"], "exists")
+        self.assertEqual(parsed.entities[1]["status"], "not_found")
+
+    def test_enumerate_workflow(self):
+        from ksec.workflows.definitions import get_workflow
+
+        wf = get_workflow("enumerate")
+        self.assertIsNotNone(wf)
+        caps = [s.capability for s in wf.steps]
+        self.assertEqual(caps, ["snmp_enum", "smtp_enum"])
+
+    def test_catalog_lists_new_tools(self):
+        from ksec.capabilities.catalog import TOOLS
+
+        names = {t.name for t in TOOLS}
+        for expected in ("snmpwalk", "onesixtyone", "smtp-user-enum"):
+            self.assertIn(expected, names)
+        caps = {t.capability for t in TOOLS}
+        self.assertIn("snmp_enum", caps)
+        self.assertIn("smtp_enum", caps)

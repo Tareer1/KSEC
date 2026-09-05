@@ -172,6 +172,147 @@ def cmd_finding_list(ctx: KsecContext, args) -> int:
     return 0
 
 
+def cmd_finding_update(ctx: KsecContext, args) -> int:
+    """Update a finding's status (spec: FALSE-POSITIVE HANDLING / finding
+    lifecycle — status transitions are audited)."""
+    from ksec.identity.users import UserRepository
+
+    actor = None
+    if getattr(args, "user", None):
+        try:
+            actor = UserRepository(ctx.db).authenticate(args.user, args.password).username
+        except KSECError as exc:
+            emit(exc.message, args.json, args.quiet)
+            return 1
+    if not getattr(args, "status", None):
+        emit("finding update requires --status", args.json, args.quiet)
+        return 1
+    try:
+        finding = ctx.findings.update_status(args.id, args.status)
+    except (KSECError, ValueError) as exc:
+        emit(str(exc), args.json, args.quiet)
+        return 1
+    ctx.audit.record(
+        event_type="finding.status",
+        actor=actor,
+        action=f"finding.status:{args.status}",
+        target=f"finding:{args.id}",
+        outcome="success",
+    )
+    emit(
+        {"id": finding.id, "status": finding.status, "updated": True},
+        args.json,
+        args.quiet,
+    )
+    return 0
+
+
+def cmd_finding_remediations(ctx: KsecContext, args) -> int:
+    """List remediation tasks + verification records for a finding."""
+    finding = ctx.findings.get(args.id)
+    if finding is None:
+        emit(f"unknown finding: {args.id}", args.json, args.quiet)
+        return 1
+    rems = ctx.findings.remediations(args.id)
+    data = []
+    for r in rems:
+        verifications = ctx.findings.verifications(r.id)
+        data.append(
+            {
+                "remediation_id": r.id,
+                "description": r.description,
+                "owner": r.owner,
+                "priority": r.priority,
+                "status": r.status,
+                "due_date": r.due_date,
+                "verifications": [
+                    {
+                        "id": v.id,
+                        "method": v.method,
+                        "result": v.result,
+                        "evidence_id": v.evidence_id,
+                        "verified_by": v.verified_by,
+                        "created_at": v.created_at,
+                    }
+                    for v in verifications
+                ],
+            }
+        )
+    emit({"finding_id": args.id, "remediations": data}, args.json, args.quiet)
+    return 0
+
+
+def cmd_finding_remediate(ctx: KsecContext, args) -> int:
+    """Create a remediation task for a finding (spec 08 #56)."""
+    try:
+        rem = ctx.findings.add_remediation(
+            args.id,
+            description=args.description or "",
+            owner=args.owner or "",
+            priority=args.priority,
+            due_date=args.due,
+        )
+    except (KSECError, ValueError) as exc:
+        emit(str(exc), args.json, args.quiet)
+        return 1
+    ctx.audit.record(
+        event_type="remediation.create",
+        actor=args.owner or None,
+        action="remediation.create",
+        target=f"finding:{args.id}",
+        outcome="success",
+    )
+    emit(
+        {"created": True, "remediation_id": rem.id, "finding_id": args.id, "status": rem.status},
+        args.json,
+        args.quiet,
+    )
+    return 0
+
+
+def cmd_finding_verify(ctx: KsecContext, args) -> int:
+    """Record a remediation verification (spec 08 #57, spec 05 #38)."""
+    actor = None
+    if getattr(args, "user", None):
+        try:
+            from ksec.identity.users import UserRepository
+
+            actor = UserRepository(ctx.db).authenticate(args.user, args.password).username
+        except KSECError as exc:
+            emit(exc.message, args.json, args.quiet)
+            return 1
+    try:
+        verification = ctx.findings.verify_remediation(
+            args.remediation,
+            method=args.method,
+            result=args.result,
+            evidence_id=args.evidence,
+            verified_by=actor or args.user or "",
+            details=args.details or "",
+        )
+    except (KSECError, ValueError) as exc:
+        emit(str(exc), args.json, args.quiet)
+        return 1
+    ctx.audit.record(
+        event_type="remediation.verify",
+        actor=actor,
+        action=f"remediation.verify:{args.result}",
+        target=f"remediation:{args.remediation}",
+        outcome="success",
+    )
+    emit(
+        {
+            "recorded": True,
+            "verification_id": verification.id,
+            "remediation_id": args.remediation,
+            "result": verification.result,
+        },
+        args.json,
+        args.quiet,
+    )
+    return 0
+
+
 # -- evidence -------------------------------------------------------------
 
 def cmd_evidence_add(ctx: KsecContext, args) -> int:
@@ -233,6 +374,40 @@ def cmd_evidence_verify(ctx: KsecContext, args) -> int:
     return 0 if ok else 1
 
 
+def cmd_evidence_custody(ctx: KsecContext, args) -> int:
+    """Show the full chain of custody for an evidence object (spec 05 #30)."""
+    evidence = ctx.evidence.get(args.id)
+    if evidence is None:
+        emit(f"unknown evidence: {args.id}", args.json, args.quiet)
+        return 1
+    events = ctx.evidence.custody_log(args.id)
+    data = [
+        {
+            "id": e.id,
+            "action": e.action,
+            "actor": e.actor,
+            "previous_state": e.previous_state,
+            "new_state": e.new_state,
+            "reason": e.reason,
+            "created_at": e.created_at,
+        }
+        for e in events
+    ]
+    if args.json:
+        emit(data, True, False)
+    elif args.quiet:
+        for e in events:
+            print(f"{e.action:<10} {e.created_at}")
+    else:
+        print(f"evidence #{args.id} chain of custody ({len(data)} events):")
+        for d in data:
+            print(
+                f"  {d['action']:<10} {d['created_at']}  actor={d['actor'] or '-':<10}"
+                f" {d['previous_state']} -> {d['new_state']}  {d['reason']}"
+            )
+    return 0
+
+
 # -- cases ----------------------------------------------------------------
 
 def cmd_case_create(ctx: KsecContext, args) -> int:
@@ -278,7 +453,20 @@ def cmd_case_list(ctx: KsecContext, args) -> int:
 
 
 def cmd_case_add_finding(ctx: KsecContext, args) -> int:
-    ctx.cases.add_finding(args.case, args.finding)
+    actor = None
+    if getattr(args, "user", None):
+        try:
+            from ksec.identity.users import UserRepository
+
+            actor = UserRepository(ctx.db).authenticate(args.user, args.password).username
+        except KSECError as exc:
+            emit(exc.message, args.json, args.quiet)
+            return 1
+    try:
+        ctx.cases.add_finding(args.case, args.finding, actor=actor)
+    except (KSECError, ValueError) as exc:
+        emit(str(exc), args.json, args.quiet)
+        return 1
     emit(
         {"case_id": args.case, "finding_id": args.finding, "linked": True},
         args.json,
@@ -303,4 +491,82 @@ def cmd_case_close(ctx: KsecContext, args) -> int:
         emit(str(exc), args.json, args.quiet)
         return 1
     emit({"closed": True, "id": case.id, "status": case.status}, args.json, args.quiet)
+    return 0
+
+
+def cmd_case_reopen(ctx: KsecContext, args) -> int:
+    """Reopen a closed case with a recorded reason (spec 05 #92)."""
+    actor = None
+    if getattr(args, "user", None):
+        try:
+            from ksec.identity.users import UserRepository
+
+            actor = UserRepository(ctx.db).authenticate(args.user, args.password).username
+        except KSECError as exc:
+            emit(exc.message, args.json, args.quiet)
+            return 1
+    try:
+        case = ctx.cases.reopen(args.id, reason=args.reason or "", actor=actor)
+    except (KSECError, ValueError) as exc:
+        emit(str(exc), args.json, args.quiet)
+        return 1
+    emit({"reopened": True, "id": case.id, "status": case.status}, args.json, args.quiet)
+    return 0
+
+
+def cmd_case_note_add(ctx: KsecContext, args) -> int:
+    try:
+        note = ctx.cases.add_note(args.case, args.content, author=args.author or "")
+    except (KSECError, ValueError) as exc:
+        emit(str(exc), args.json, args.quiet)
+        return 1
+    emit({"added": True, "note_id": note.id, "case_id": args.case}, args.json, args.quiet)
+    return 0
+
+
+def cmd_case_note_list(ctx: KsecContext, args) -> int:
+    notes = ctx.cases.notes(args.case)
+    data = [
+        {"id": n.id, "author": n.author, "content": n.content, "created_at": n.created_at}
+        for n in notes
+    ]
+    if args.json:
+        emit(data, True, False)
+    elif args.quiet:
+        for n in notes:
+            print(n.id)
+    else:
+        if not data:
+            print("no notes")
+        for d in data:
+            print(f"{d['id']:>3}  {d['author'] or '-':<10} {d['created_at']}  {d['content']}")
+    return 0
+
+
+def cmd_case_timeline(ctx: KsecContext, args) -> int:
+    case_id = getattr(args, "case", None) or getattr(args, "id", None)
+    if case_id is None:
+        emit("case id required", args.json, args.quiet)
+        return 1
+    events = ctx.cases.events(case_id)
+    data = [
+        {
+            "id": e.id,
+            "event_type": e.event_type,
+            "details": e.details,
+            "actor": e.actor,
+            "created_at": e.created_at,
+        }
+        for e in events
+    ]
+    if args.json:
+        emit(data, True, False)
+    elif args.quiet:
+        for e in events:
+            print(e.id)
+    else:
+        if not data:
+            print("no events")
+        for d in data:
+            print(f"{d['id']:>3}  {d['event_type']:<16} {d['created_at']}  {d['details']}  ({d['actor']})")
     return 0

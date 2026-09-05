@@ -14,7 +14,10 @@ from ksec.risk.engine import RiskResult
 
 VALID_SEVERITY = ("info", "low", "medium", "high", "critical")
 VALID_CONFIDENCE = ("low", "medium", "high")
-VALID_STATUS = ("open", "confirmed", "false_positive", "remediated", "verified")
+VALID_STATUS = ("open", "confirmed", "false_positive", "accepted_risk", "remediated", "verified")
+VALID_PRIORITY = ("low", "medium", "high", "critical")
+VALID_REMEDIATION_STATUS = ("open", "in_progress", "completed", "verified", "rejected")
+VALID_VERIFY_RESULT = ("verified", "failed", "inconclusive")
 
 
 @dataclass(frozen=True)
@@ -33,6 +36,31 @@ class Finding:
     source: str
     created_at: str
     updated_at: str
+
+
+@dataclass(frozen=True)
+class Remediation:
+    id: int
+    finding_id: int
+    description: str
+    owner: str
+    priority: str
+    status: str
+    due_date: str | None
+    created_at: str
+    updated_at: str
+
+
+@dataclass(frozen=True)
+class RemediationVerification:
+    id: int
+    remediation_id: int
+    method: str
+    result: str
+    evidence_id: int | None
+    verified_by: str
+    details: str
+    created_at: str
 
 
 class FindingService:
@@ -126,6 +154,131 @@ class FindingService:
             (risk.score, risk.level, now_utc(), finding_id),
         )
         return self.get(finding_id)
+
+    # -- remediation engine (spec 08 #56-57, spec 05 #37-38) ----------------
+
+    def remediations(self, finding_id: int) -> list[Remediation]:
+        rows = self.db.query_all(
+            "SELECT * FROM finding_remediations WHERE finding_id = ? ORDER BY id",
+            (finding_id,),
+        )
+        return [self._remediation_from_row(r) for r in rows]
+
+    def add_remediation(
+        self,
+        finding_id: int,
+        *,
+        description: str = "",
+        owner: str = "",
+        priority: str = "medium",
+        due_date: str | None = None,
+    ) -> Remediation:
+        if self.get(finding_id) is None:
+            raise ValueError(f"Unknown finding: {finding_id}")
+        if priority not in VALID_PRIORITY:
+            raise ValueError(f"Invalid priority: {priority}")
+        now = now_utc()
+        with self.db.transaction() as conn:
+            cursor = conn.execute(
+                "INSERT INTO finding_remediations (finding_id, description, owner, priority,"
+                " status, due_date, created_at, updated_at) VALUES (?, ?, ?, ?, 'open', ?, ?, ?)",
+                (finding_id, description, owner, priority, due_date, now, now),
+            )
+        return self._remediation_from_row(
+            self.db.query_one(
+                "SELECT * FROM finding_remediations WHERE id = ?", (cursor.lastrowid,)
+            )
+        )
+
+    def update_remediation_status(self, remediation_id: int, status: str) -> Remediation:
+        if status not in VALID_REMEDIATION_STATUS:
+            raise ValueError(f"Invalid remediation status: {status}")
+        self.db.execute(
+            "UPDATE finding_remediations SET status = ?, updated_at = ? WHERE id = ?",
+            (status, now_utc(), remediation_id),
+        )
+        row = self.db.query_one(
+            "SELECT * FROM finding_remediations WHERE id = ?", (remediation_id,)
+        )
+        if row is None:
+            raise ValueError(f"Unknown remediation: {remediation_id}")
+        return self._remediation_from_row(row)
+
+    def verify_remediation(
+        self,
+        remediation_id: int,
+        *,
+        method: str = "manual",
+        result: str = "verified",
+        evidence_id: int | None = None,
+        verified_by: str = "",
+        details: str = "",
+    ) -> RemediationVerification:
+        """Record a separate verification (spec 05 #38): a remediation is only
+        VERIFIED through an explicit verification record with evidence."""
+        row = self.db.query_one(
+            "SELECT * FROM finding_remediations WHERE id = ?", (remediation_id,)
+        )
+        if row is None:
+            raise ValueError(f"Unknown remediation: {remediation_id}")
+        if result not in VALID_VERIFY_RESULT:
+            raise ValueError(f"Invalid verification result: {result}")
+        with self.db.transaction() as conn:
+            cursor = conn.execute(
+                "INSERT INTO remediation_verifications (remediation_id, method, result,"
+                " evidence_id, verified_by, details, created_at)"
+                " VALUES (?, ?, ?, ?, ?, ?, ?)",
+                (remediation_id, method, result, evidence_id, verified_by, details, now_utc()),
+            )
+        # If the verification confirms remediation, mark the remediation
+        # verified and auto-propagate to the finding status.
+        if result == "verified":
+            self.update_remediation_status(remediation_id, "verified")
+            finding_id = row["finding_id"]
+            self.update_status(finding_id, "verified")
+        elif result == "failed":
+            self.update_remediation_status(remediation_id, "in_progress")
+        return self._verification_from_row(
+            self.db.query_one(
+                "SELECT * FROM remediation_verifications WHERE id = ?", (cursor.lastrowid,)
+            )
+        )
+
+    def verifications(self, remediation_id: int) -> list[RemediationVerification]:
+        rows = self.db.query_all(
+            "SELECT * FROM remediation_verifications WHERE remediation_id = ? ORDER BY id",
+            (remediation_id,),
+        )
+        return [self._verification_from_row(r) for r in rows]
+
+    @staticmethod
+    def _remediation_from_row(row: sqlite3.Row | None) -> Remediation:
+        assert row is not None
+        return Remediation(
+            id=row["id"],
+            finding_id=row["finding_id"],
+            description=row["description"],
+            owner=row["owner"],
+            priority=row["priority"],
+            status=row["status"],
+            due_date=row["due_date"],
+            created_at=row["created_at"],
+            updated_at=row["updated_at"],
+        )
+
+    @staticmethod
+    def _verification_from_row(row: sqlite3.Row | None) -> RemediationVerification:
+        assert row is not None
+        return RemediationVerification(
+            id=row["id"],
+            remediation_id=row["remediation_id"],
+            method=row["method"],
+            result=row["result"],
+            evidence_id=row["evidence_id"],
+            verified_by=row["verified_by"],
+            details=row["details"],
+            created_at=row["created_at"],
+        )
 
     @staticmethod
     def _from_row(row: sqlite3.Row) -> Finding:

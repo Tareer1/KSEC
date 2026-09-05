@@ -9,6 +9,7 @@ from __future__ import annotations
 import ipaddress
 import sqlite3
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from urllib.parse import urlsplit
 
 from ksec.audit.service import AuditService
@@ -17,6 +18,26 @@ from ksec.db.connection import Database
 from ksec.identity.users import now_utc
 
 VALID_EFFECTS = ("allow", "deny")
+
+
+def _parse_ts(value: str | None) -> datetime | None:
+    """Parse an ISO-8601 timestamp (date-only forms are allowed).
+
+    Naive timestamps are treated as UTC so comparisons against ``now_utc()``
+    (offset-aware) are always valid.
+    """
+    if not value:
+        return None
+    text = value.strip()
+    try:
+        if len(text) == 10 and text[4] == "-" and text[7] == "-":
+            text = text + "T00:00:00+00:00"
+        parsed = datetime.fromisoformat(text.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return parsed
 
 
 def _normalize_target(target: str) -> str:
@@ -77,6 +98,22 @@ class Engagement:
     description: str
     status: str
     created_at: str
+    valid_from: str | None = None
+    valid_until: str | None = None
+
+    @property
+    def window_status(self) -> str:
+        """active | not-yet-valid | expired | no-window (time-bound auth, spec 06#54)."""
+        if not self.valid_from and not self.valid_until:
+            return "no-window"
+        now = datetime.fromisoformat(now_utc())
+        start = _parse_ts(self.valid_from)
+        end = _parse_ts(self.valid_until)
+        if start is not None and now < start:
+            return "not-yet-valid"
+        if end is not None and now > end:
+            return "expired"
+        return "active"
 
 
 class AuthorizationService:
@@ -93,16 +130,29 @@ class AuthorizationService:
         return row["username"] if row else None
 
     def create_engagement(
-        self, name: str, description: str = "", created_by: int | None = None
+        self,
+        name: str,
+        description: str = "",
+        created_by: int | None = None,
+        valid_from: str | None = None,
+        valid_until: str | None = None,
     ) -> Engagement:
         if not name or not name.strip():
             raise AuthorizationError("Engagement name must not be empty")
+        if valid_until and _parse_ts(valid_until) is None:
+            raise AuthorizationError(
+                f"invalid valid_until timestamp: {valid_until!r} (use ISO-8601)"
+            )
+        if valid_from and _parse_ts(valid_from) is None:
+            raise AuthorizationError(
+                f"invalid valid_from timestamp: {valid_from!r} (use ISO-8601)"
+            )
         created = now_utc()
         with self.db.transaction() as conn:
             cursor = conn.execute(
-                "INSERT INTO engagements (name, description, status, created_at, created_by)"
-                " VALUES (?, ?, 'open', ?, ?)",
-                (name.strip(), description, created, created_by),
+                "INSERT INTO engagements (name, description, status, created_at, created_by,"
+                " valid_from, valid_until) VALUES (?, ?, 'open', ?, ?, ?, ?)",
+                (name.strip(), description, created, created_by, valid_from, valid_until),
             )
         engagement = self.get_engagement(cursor.lastrowid)
         assert engagement is not None
@@ -112,12 +162,14 @@ class AuthorizationService:
                 actor=self._actor_name(created_by),
                 action="authz.engagement.create",
                 target=f"engagement:{engagement.id}:{engagement.name}",
+                payload={"valid_from": valid_from, "valid_until": valid_until},
             )
         return engagement
 
     def get_engagement(self, engagement_id: int) -> Engagement | None:
         row = self.db.query_one(
-            "SELECT id, name, description, status, created_at FROM engagements WHERE id = ?",
+            "SELECT id, name, description, status, created_at, valid_from, valid_until"
+            " FROM engagements WHERE id = ?",
             (engagement_id,),
         )
         if row is None:
@@ -128,11 +180,14 @@ class AuthorizationService:
             description=row["description"],
             status=row["status"],
             created_at=row["created_at"],
+            valid_from=row["valid_from"],
+            valid_until=row["valid_until"],
         )
 
     def list_engagements(self) -> list[Engagement]:
         rows = self.db.query_all(
-            "SELECT id, name, description, status, created_at FROM engagements ORDER BY id"
+            "SELECT id, name, description, status, created_at, valid_from, valid_until"
+            " FROM engagements ORDER BY id"
         )
         return [
             Engagement(
@@ -141,6 +196,8 @@ class AuthorizationService:
                 description=row["description"],
                 status=row["status"],
                 created_at=row["created_at"],
+                valid_from=row["valid_from"],
+                valid_until=row["valid_until"],
             )
             for row in rows
         ]
@@ -185,8 +242,18 @@ class AuthorizationService:
     ) -> tuple[bool, str]:
         """Check whether ``target`` is in scope for an engagement.
 
-        Deny rules win over allow rules. Returns ``(authorized, reason)``.
+        Deny rules win over allow rules. Engagements outside their validity
+        window (spec 06#54) are refused before scope matching. Returns
+        ``(authorized, reason)``.
         """
+        engagement = self.get_engagement(engagement_id)
+        if engagement is None:
+            return False, "unknown engagement"
+        window = engagement.window_status
+        if window == "expired":
+            return False, f"engagement expired on {engagement.valid_until}"
+        if window == "not-yet-valid":
+            return False, f"engagement not valid until {engagement.valid_from}"
         rules = self.db.query_all(
             "SELECT target, action, effect FROM authorizations WHERE engagement_id = ?",
             (engagement_id,),

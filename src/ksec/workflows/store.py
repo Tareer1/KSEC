@@ -37,13 +37,22 @@ class CustomWorkflow:
     created_by: str
     created_at: str
     updated_at: str
+    version: int = 1
 
     def to_definition(self) -> WorkflowDefinition:
         return WorkflowDefinition(
             name=self.name,
             description=self.description,
+            version=self.version,
             steps=tuple(
-                WorkflowStep(capability=step["capability"], options=step.get("options", {}))
+                WorkflowStep(
+                    capability=step["capability"],
+                    options=step.get("options", {}),
+                    name=step.get("name"),
+                    depends_on=tuple(step.get("depends_on", []) or []),
+                    retry=int(step.get("retry", 0) or 0),
+                    retry_delay=float(step.get("retry_delay", 1.0) or 1.0),
+                )
                 for step in self.steps
             ),
         )
@@ -86,6 +95,7 @@ class WorkflowStore:
             return ["workflow must contain at least one step"]
         known = self.known_capabilities()
         adapters = self.adapters.capabilities() if self.adapters else set()
+        names: set[str] = set()
         for index, step in enumerate(steps):
             capability = step.get("capability")
             if not isinstance(capability, str) or not capability:
@@ -98,6 +108,27 @@ class WorkflowStore:
                     f"step {index + 1}: capability {capability!r} has no adapter installed — "
                     "it will fail at runtime"
                 )
+            name = step.get("name")
+            if name is not None:
+                if not isinstance(name, str) or not re.fullmatch(r"[a-z0-9_]+", name):
+                    errors.append(
+                        f"step {index + 1}: invalid 'name' {name!r} (use [a-z0-9_])"
+                    )
+                elif name in names:
+                    errors.append(f"step {index + 1}: duplicate step name {name!r}")
+                else:
+                    names.add(name)
+            depends_on = step.get("depends_on", []) or []
+            if not isinstance(depends_on, list) or not all(
+                isinstance(d, str) for d in depends_on
+            ):
+                errors.append(f"step {index + 1}: 'depends_on' must be a list of step names")
+            retry = step.get("retry", 0) or 0
+            if not isinstance(retry, int) or retry < 0 or retry > 10:
+                errors.append(f"step {index + 1}: 'retry' must be an int in 0..10")
+            retry_delay = step.get("retry_delay", 1.0) or 1.0
+            if not isinstance(retry_delay, (int, float)) or retry_delay < 0:
+                errors.append(f"step {index + 1}: 'retry_delay' must be a non-negative number")
             options = step.get("options", {})
             if not isinstance(options, dict):
                 errors.append(f"step {index + 1}: 'options' must be a JSON object")
@@ -109,7 +140,40 @@ class WorkflowStore:
                     errors.append(
                         f"step {index + 1}: option {key!r} has unsupported value type"
                     )
+        # Resolve explicit names for dependency checks (positional ids are implicit).
+        resolved = {}
+        for index, step in enumerate(steps):
+            resolved[step.get("name") or f"step{index + 1}"] = index
+        for index, step in enumerate(steps):
+            for dep in step.get("depends_on", []) or []:
+                if dep not in resolved:
+                    errors.append(f"step {index + 1}: depends_on unknown step {dep!r}")
+        # Cycle detection over the dependency graph.
+        if self._has_cycle(steps, resolved):
+            errors.append("workflow contains a dependency cycle")
         return errors
+
+    @staticmethod
+    def _has_cycle(steps: list[dict], resolved: dict) -> bool:
+        """Kahn-style cycle check on the step dependency graph."""
+        indegree = {name: 0 for name in resolved}
+        edges: dict[str, list[str]] = {name: [] for name in resolved}
+        for index, step in enumerate(steps):
+            name = step.get("name") or f"step{index + 1}"
+            for dep in step.get("depends_on", []) or []:
+                if dep in resolved:
+                    edges[dep].append(name)
+                    indegree[name] += 1
+        queue = [n for n, d in indegree.items() if d == 0]
+        visited = 0
+        while queue:
+            node = queue.pop()
+            visited += 1
+            for nxt in edges[node]:
+                indegree[nxt] -= 1
+                if indegree[nxt] == 0:
+                    queue.append(nxt)
+        return visited != len(resolved)
 
     @staticmethod
     def _valid_value(value: Any) -> bool:
@@ -139,7 +203,7 @@ class WorkflowStore:
             with self.db.transaction() as conn:
                 cursor = conn.execute(
                     "INSERT INTO custom_workflows (name, description, steps, enabled,"
-                    " created_by, created_at, updated_at) VALUES (?, ?, ?, 1, ?, ?, ?)",
+                    " created_by, created_at, updated_at, version) VALUES (?, ?, ?, 1, ?, ?, ?, 1)",
                     (name, description, json.dumps(steps), created_by, now, now),
                 )
         except sqlite3.IntegrityError as exc:
@@ -183,7 +247,7 @@ class WorkflowStore:
             errors = self.validate_steps(steps)
             if errors:
                 raise KSECError(f"invalid workflow: {'; '.join(errors)}")
-        assignments = ["updated_at = ?"]
+        assignments = ["updated_at = ?", "version = version + 1"]
         params: list = [now_utc()]
         if steps is not None:
             assignments.append("steps = ?")
@@ -236,4 +300,5 @@ class WorkflowStore:
             created_by=row["created_by"],
             created_at=row["created_at"],
             updated_at=row["updated_at"],
+            version=int(row["version"] or 1),
         )

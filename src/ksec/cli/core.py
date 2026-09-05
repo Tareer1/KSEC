@@ -90,6 +90,7 @@ def cmd_status(ctx: KsecContext, args) -> int:
             "require_authorization": config.require_authorization,
             "safe_mode": config.safe_mode,
             "read_only": config.read_only,
+            "lab_mode": config.lab_mode,
         },
     }
     emit(data, args.json, args.quiet)

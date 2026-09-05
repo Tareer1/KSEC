@@ -148,6 +148,35 @@ class SessionManager:
     def resume(self, session_id: str) -> Session:
         return self.transition(session_id, "ACTIVE")
 
+    def switch(self, user: User, session_id: str) -> Session:
+        """Switch the active context to another of the user's sessions.
+
+        Pauses every other ACTIVE session owned by ``user`` and activates the
+        target (spec 07: session switch). The target must belong to the user.
+        """
+        target = self.get(session_id)
+        if target is None:
+            raise SessionError(f"Unknown session: {session_id}")
+        if target.user_id != user.id:
+            raise SessionError("Session belongs to a different user")
+        for session in self.list(user_id=user.id):
+            if session.id != session_id and session.state == "ACTIVE":
+                self.transition(session.id, "PAUSED")
+        if target.state != "ACTIVE":
+            return self.transition(session_id, "ACTIVE")
+        return target
+
+    def reconnect(self, user: User, session_id: str) -> Session:
+        """Reconnect to a paused/active session owned by ``user`` (spec 07)."""
+        target = self.get(session_id)
+        if target is None:
+            raise SessionError(f"Unknown session: {session_id}")
+        if target.user_id != user.id:
+            raise SessionError("Session belongs to a different user")
+        if target.state == "ACTIVE":
+            return target
+        return self.transition(session_id, "ACTIVE")
+
     def require_active(self, session_id: str, user_id: int) -> Session:
         """Return the session if it is active and owned by ``user_id``."""
         session = self.get(session_id)

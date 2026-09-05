@@ -239,8 +239,8 @@ say "15. adversary simulation"
 run_ok "adv profile add"  "${BIN[@]}" adversary profile add --name apt-smoke --threat-actor APT-Smoke --technique T1046 --technique T1071 --user "$ADMIN"
 run_ok "adv profile list" "${BIN[@]}" adversary profile list
 run_ok "adv profile show" "${BIN[@]}" adversary profile show 1
-run_ok "adv coverage"     "${BIN[@]}" adversary coverage --profile 1
-run_ok "adv exercise new" "${BIN[@]}" adversary exercise new --name ex-smoke --profile 1 --engagement 1 --user "$ADMIN" --password "$APW"
+run_ok "adv coverage"     "${BIN[@]}" adversary coverage --profile-id 1
+run_ok "adv exercise new" "${BIN[@]}" adversary exercise new --name ex-smoke --profile-id 1 --engagement 1 --user "$ADMIN" --password "$APW"
 run_ok "adv exercise list" "${BIN[@]}" adversary exercise list
 run_ok "adv exercise dry-run" "${BIN[@]}" adversary exercise run 1 example.com --engagement 1 --user "$ADMIN" --password "$APW" --dry-run
 run_grep "adv exercise blocks out-of-scope" "REQUIRE_AUTHORIZATION" "${BIN[@]}" adversary exercise run 1 203.0.113.200 --engagement 1 --user "$ADMIN" --password "$APW" --dry-run
@@ -315,12 +315,13 @@ else
   FAIL=$((FAIL + 1)); FAILED+=("role red"); echo "FAIL  role red playbook"
 fi
 run_ok "role purple" "${BIN[@]}" role purple
+run_grep "role blackhat" "BLACK HAT emulation playbook" "${BIN[@]}" role blackhat
 run_ok "ask --list" "${BIN[@]}" ask --list
 expect_fail "ask unmatched" "${BIN[@]}" ask "zzqqxxyy nonsense"
 expect_fail "role unknown" "${BIN[@]}" role hacker
 
 say "22. help parsers (every group)"
-for g in init status doctor version config env admin audit tools session engagement assess job asset finding evidence case report learn workflow dfir intel plugin adversary vuln atomic update notify soc run backup tui dashboard ask role; do
+for g in init status doctor version config env admin audit tools session engagement assess job asset finding evidence case report learn workflow dfir intel plugin adversary vuln atomic update notify soc run backup tui dashboard ask role stop db export grc malware endpoint; do
   run_ok "help: $g" "${BIN[@]}" "$g" --help
 done
 
@@ -428,6 +429,103 @@ else
 fi
 kill "$DASHD" 2>/dev/null
 wait "$DASHD" 2>/dev/null
+
+# 30. gap-closing round: finding lifecycle, case notes, custody, exports, grc, malware, endpoint, stop, db --------
+say "30. finding lifecycle + case collaboration"
+run_ok "finding update status" "${BIN[@]}" finding update 1 --status confirmed
+run_ok "finding remediate"    "${BIN[@]}" finding remediate 1 --owner ops --priority high --description "upgrade tls"
+run_ok "finding verify"       "${BIN[@]}" finding verify --remediation 1 --method retest --result verified --user "$ADMIN" --password "$APW"
+run_ok "finding remediations" "${BIN[@]}" finding remediations 1
+expect_fail "finding update bad status" "${BIN[@]}" finding update 1 --status bogus
+expect_fail "finding verify unknown rem" "${BIN[@]}" finding verify --remediation 4242 --result verified
+run_ok "case note add"        "${BIN[@]}" case note add --case 1 --content "smoke note" --author operator
+run_ok "case note list"       "${BIN[@]}" case note list --case 1
+run_ok "case timeline"        "${BIN[@]}" case timeline 1
+run_ok "case reopen"          "${BIN[@]}" case reopen 1 --reason "smoke recheck"
+run_ok "evidence custody"     "${BIN[@]}" evidence custody 1
+expect_fail "evidence custody unknown" "${BIN[@]}" evidence custody 4242
+
+say "31. db introspection + exports"
+run_ok "db version"   "${BIN[@]}" db version
+run_ok "db health"    "${BIN[@]}" db health
+run_ok "db repair"    "${BIN[@]}" db repair --yes
+run_ok "export findings"  "${BIN[@]}" export findings --out "$KSEC_HOME/findings.json"
+run_ok "export evidence"  "${BIN[@]}" export evidence --out "$KSEC_HOME/evidence.json"
+run_ok "export assets"    "${BIN[@]}" export assets --out "$KSEC_HOME/assets.json"
+run_ok "export case"      "${BIN[@]}" export case 1 --out "$KSEC_HOME/case-1.json"
+expect_fail "export unknown case" "${BIN[@]}" export case 4242
+if grep -q '"chain_of_custody"' "$KSEC_HOME/evidence.json" 2>/dev/null; then
+  PASS=$((PASS + 1)); echo "PASS  export evidence includes custody"
+else
+  FAIL=$((FAIL + 1)); FAILED+=("export custody"); echo "FAIL  export evidence includes custody"
+fi
+
+say "32. GRC / malware / endpoint"
+run_ok "grc frameworks"  "${BIN[@]}" grc frameworks
+run_ok "grc controls"    "${BIN[@]}" grc controls --framework "ISO 27001"
+run_ok "grc status"      "${BIN[@]}" grc status
+run_ok "grc check"       "${BIN[@]}" grc check
+printf '#!/bin/sh\necho smoke-c2.example\n' > "$KSEC_HOME/sample.sh"
+run_ok "malware analyze" "${BIN[@]}" malware analyze "$KSEC_HOME/sample.sh" --user "$ADMIN"
+expect_fail "malware missing file" "${BIN[@]}" malware analyze "$KSEC_HOME/nope.bin"
+run_ok "endpoint inventory" "${BIN[@]}" endpoint inventory
+run_ok "endpoint process"  "${BIN[@]}" endpoint process --limit 20
+run_ok "endpoint user"     "${BIN[@]}" endpoint user
+run_ok "endpoint port"     "${BIN[@]}" endpoint port
+run_ok "endpoint check"    "${BIN[@]}" endpoint check
+
+say "33. emergency stop + reset"
+run_ok "stop --status (inactive)" "${BIN[@]}" stop --status
+run_ok "stop --all"      "${BIN[@]}" stop --all
+run_grep "stop persists across process" '"emergency_stop_active": true' "${BIN[@]}" stop --status
+expect_fail "submit refused while stopped" "${BIN[@]}" job schedule add dns_lookup example.com --cron "0 6 * * *" --engagement 1 --user "$ADMIN" --password "$APW"
+run_ok "stop --reset"    "${BIN[@]}" stop --reset
+run_ok "stop --status (cleared)" "${BIN[@]}" stop --status
+
+say "34. time-bound auth + lab mode + modes"
+run_ok "mode status" "${BIN[@]}" mode status
+run_ok "engagement create timebound" "${BIN[@]}" engagement create --name timebound --valid-until 2099-12-31
+TIME_ID=$("${BIN[@]}" engagement list --quiet | tail -1)
+run_ok "scope add for timebound" "${BIN[@]}" engagement scope add --engagement "$TIME_ID" --target example.com --effect allow
+run_ok "run on timebound engagement" "${BIN[@]}" run dns_lookup example.com --engagement "$TIME_ID" --user "$ADMIN" --password "$APW"
+run_ok "mode set lab on" "${BIN[@]}" mode set lab on
+expect_fail "lab blocks public target" "${BIN[@]}" run dns_lookup example.com --engagement "$TIME_ID" --user "$ADMIN" --password "$APW"
+run_ok "mode set lab off" "${BIN[@]}" mode set lab off
+run_ok "expired engagement created" "${BIN[@]}" engagement create --name expired --valid-until 2020-01-01
+EXP_ID=$("${BIN[@]}" engagement list --quiet | tail -1)
+expect_fail "expired engagement blocks run" "${BIN[@]}" run dns_lookup example.com --engagement "$EXP_ID" --user "$ADMIN" --password "$APW"
+
+say "35. workflow DAG + versioning"
+run_ok "workflow dag create" "${BIN[@]}" workflow create --name dagflow --steps-json '[{"capability":"dns_lookup","name":"s1"},{"capability":"port_scan","name":"s2","depends_on":["s1"],"retry":1,"retry_delay":0.1}]'
+run_ok "workflow dag validate" "${BIN[@]}" workflow validate --name dagflow
+expect_fail "cycle rejected" "${BIN[@]}" workflow create --name cyc --steps-json '[{"capability":"dns_lookup","name":"a","depends_on":["b"]},{"capability":"port_scan","name":"b","depends_on":["a"]}]'
+expect_fail "unknown dep rejected" "${BIN[@]}" workflow create --name bad --steps-json '[{"capability":"dns_lookup","name":"a","depends_on":["ghost"]}]'
+run_ok "workflow dag run" "${BIN[@]}" workflow run dagflow example.com --engagement 1 --user "$ADMIN" --password "$APW"
+run_grep "workflow history has version" '"version": 1' "${BIN[@]}" workflow history --json
+run_ok "workflow edit bumps version" "${BIN[@]}" workflow edit --name dagflow --description changed
+run_grep "workflow list shows v2" 'v2' "${BIN[@]}" workflow list
+
+say "36. session switch/reconnect + global flags"
+S1=$("${BIN[@]}" session list --quiet | sed -n 1p)
+S2=$("${BIN[@]}" session list --quiet | sed -n 2p)
+if [ -n "$S1" ] && [ -n "$S2" ] && [ "$S1" != "$S2" ]; then
+  run_ok "session switch" "${BIN[@]}" session switch "$S2" --user "$ADMIN" --password "$APW"
+  run_ok "session reconnect" "${BIN[@]}" session reconnect "$S1" --user "$ADMIN" --password "$APW"
+else
+  run_ok "session open red" "${BIN[@]}" session open --user "$ADMIN" --password "$APW" --workspace RED_TEAM
+  run_ok "session open blue" "${BIN[@]}" session open --user "$ADMIN" --password "$APW" --workspace BLUE_TEAM
+  S1=$("${BIN[@]}" session list --quiet | sed -n 1p)
+  S2=$("${BIN[@]}" session list --quiet | sed -n 2p)
+  run_ok "session switch (2nd try)" "${BIN[@]}" session switch "$S2" --user "$ADMIN" --password "$APW"
+  run_ok "session reconnect (2nd try)" "${BIN[@]}" session reconnect "$S1" --user "$ADMIN" --password "$APW"
+fi
+run_ok "tools search" "${BIN[@]}" tools search dns
+run_ok "tools capabilities" "${BIN[@]}" tools capabilities
+run_ok "tools update" "${BIN[@]}" tools update
+run_ok "tools list --missing" "${BIN[@]}" tools list --missing
+run_ok "tools docs" "${BIN[@]}" tools docs nmap
+run_ok "global --debug --no-color" "${BIN[@]}" --debug --no-color version
+run_ok "global --config" "${BIN[@]}" --config "$KSEC_CONFIG" version
 
 # ---------------------------------------------------------------------------
 echo

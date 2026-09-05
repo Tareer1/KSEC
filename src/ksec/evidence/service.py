@@ -32,6 +32,18 @@ class Evidence:
     created_at: str
 
 
+@dataclass(frozen=True)
+class CustodyEvent:
+    id: int
+    evidence_id: int
+    action: str
+    actor: str
+    previous_state: str
+    new_state: str
+    reason: str
+    created_at: str
+
+
 class EvidenceService:
     def __init__(self, db: Database):
         self.db = db
@@ -67,7 +79,16 @@ class EvidenceService:
                     now_utc(),
                 ),
             )
-        return self.get(cursor.lastrowid)
+        evidence = self.get(cursor.lastrowid)
+        assert evidence is not None
+        self.record_custody(
+            evidence.id,
+            action="CAPTURED",
+            actor=operator or "system",
+            new_state="captured",
+            reason=f"collected by {tool or 'manual'}",
+        )
+        return evidence
 
     def get(self, evidence_id: int) -> Evidence | None:
         row = self.db.query_one("SELECT * FROM evidence WHERE id = ?", (evidence_id,))
@@ -90,8 +111,77 @@ class EvidenceService:
             return False, "unknown evidence"
         current = hash_content(evidence.content)
         if current == evidence.sha256:
+            self.record_custody(
+                evidence_id,
+                action="VERIFIED",
+                actor="system",
+                previous_state="captured",
+                new_state="verified",
+                reason="hash match",
+            )
             return True, "integrity verified"
+        self.record_custody(
+            evidence_id,
+            action="VERIFIED",
+            actor="system",
+            previous_state="captured",
+            new_state="integrity_failure",
+            reason="content hash mismatch — evidence was altered",
+        )
         return False, "content hash mismatch — evidence was altered"
+
+    def record_custody(
+        self,
+        evidence_id: int,
+        *,
+        action: str,
+        actor: str = "system",
+        previous_state: str = "",
+        new_state: str = "",
+        reason: str = "",
+    ) -> CustodyEvent:
+        """Append a chain-of-custody event (spec 05 #30)."""
+        now = now_utc()
+        with self.db.transaction() as conn:
+            cursor = conn.execute(
+                "INSERT INTO evidence_custody (evidence_id, action, actor, previous_state,"
+                " new_state, reason, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                (evidence_id, action.upper(), actor, previous_state, new_state, reason, now),
+            )
+        row = self.db.query_one(
+            "SELECT * FROM evidence_custody WHERE id = ?", (cursor.lastrowid,)
+        )
+        assert row is not None
+        return CustodyEvent(
+            id=row["id"],
+            evidence_id=row["evidence_id"],
+            action=row["action"],
+            actor=row["actor"],
+            previous_state=row["previous_state"],
+            new_state=row["new_state"],
+            reason=row["reason"],
+            created_at=row["created_at"],
+        )
+
+    def custody_log(self, evidence_id: int) -> list[CustodyEvent]:
+        """Full chain of custody for one evidence object, oldest first."""
+        rows = self.db.query_all(
+            "SELECT * FROM evidence_custody WHERE evidence_id = ? ORDER BY id",
+            (evidence_id,),
+        )
+        return [
+            CustodyEvent(
+                id=r["id"],
+                evidence_id=r["evidence_id"],
+                action=r["action"],
+                actor=r["actor"],
+                previous_state=r["previous_state"],
+                new_state=r["new_state"],
+                reason=r["reason"],
+                created_at=r["created_at"],
+            )
+            for r in rows
+        ]
 
     @staticmethod
     def _from_row(row: sqlite3.Row) -> Evidence:

@@ -3,8 +3,9 @@
 Answers free-form questions — from absolute basics ("what is an ip
 address", "nmap kya hai") to role playbooks ("red team kaise shuru
 karun") — with curated topics plus the exact commands to run.
-``ksec role red|blue|purple|learner`` is a shortcut to the four role
-playbooks.
+``ksec role red|blue|purple|blackhat|learner`` is a shortcut to the
+role playbooks (blackhat = controlled authorized emulation of a real
+intruder's mindset, never unrestricted activity).
 """
 from __future__ import annotations
 
@@ -128,12 +129,14 @@ def cmd_role(ctx: KsecContext, args) -> int:
         "osint": "role-purple",
         "learner": "role-learner",
         "learning": "role-learner",
+        "blackhat": "role-blackhat",
+        "black hat": "role-blackhat",
     }
     name = (args.name or "").strip().lower()
     topic = knowledge.get(role_map.get(name, name))
     if topic is None:
         emit(
-            f"unknown role: {name} (choose red | blue | purple | learner)",
+            f"unknown role: {name} (choose red | blue | purple | blackhat | learner)",
             args.json,
             args.quiet,
         )

@@ -3,6 +3,103 @@
 All notable changes are tracked here. Format follows
 [Keep a Changelog](https://keepachangelog.com/) and semantic versioning.
 
+## [Unreleased] — spec completion round (safety, time-bound auth, lab mode, workflow DAG/versioning, CLI)
+
+### Added — time-bound authorization + lab mode (spec 06)
+
+- **Time-bound authorization** (migration `014`): engagements carry an
+  optional validity window (`valid_from` / `valid_until`). Engagements that
+  are not yet valid or already expired are refused at the policy gate
+  (`ksec engagement create --valid-from --valid-until`; `ksec engagement
+  list` flags `[not-yet-valid]` / `[expired]`).
+- **Lab/CTF mode enforcement**: with `[safety] lab_mode = true`, every
+  target action is restricted to lab-range networks and lab-labelled
+  hostnames (private/loopback CIDRs, `.test/.local/.lab/.ctf/.lan` and
+  lab/ctf/target hostname markers). Public targets are denied with a clear
+  reason.
+- **`ksec mode` command**: `ksec mode status` shows operation + safety
+  modes; `ksec mode set lab|safe|read-only on|off` persists to the config
+  file without duplicating TOML tables.
+
+### Added — workflow DAG, retry and versioning (spec 07)
+
+- **Dependency graph (DAG)**: workflow steps accept `name` and `depends_on`
+  so a step only runs after its dependencies; the engine executes steps in
+  dependency order. Validation rejects unknown dependencies and cycles.
+- **Retry with exponential backoff**: per-step `retry` (0-10) and
+  `retry_delay` fields retry failed jobs with backoff.
+- **Immutable executed versions** (migration `014`): custom workflows carry
+  a `version` (bumped on every edit) and each run snapshots the exact
+  definition + version that executed (`ksec workflow history` shows the
+  version + snapshot).
+
+### Added — CLI completion (spec 03/07)
+
+- **Session switch/reconnect**: `ksec session switch <id>` pauses the
+  user's other active sessions and activates the target;
+  `ksec session reconnect <id>` resumes a paused session (spec 07 §31-32).
+- **Tool management**: `ksec tools search`, `tools capabilities`,
+  `tools docs`, `tools update`, `tools remove` and `tools list
+  --category/--installed/--missing/--broken` filters.
+- **Dashboard auth** (spec 06 §75): `ksec dashboard start --require-auth`
+  validates a `Bearer` API token (same `ksec api` token store) on every
+  request; the page prompts for a token.
+- **Global flags** (spec 03): `--debug`, `--no-color`, `--profile NAME`
+  (`[profiles.<name>]` config sections, deep-merged) and `--config PATH`.
+  Also fixed a pre-existing argparse bug where root-level flags given
+  before the subcommand (e.g. `ksec --json status`) were silently dropped.
+- **Breaking rename**: `ksec adversary coverage/exercise new --profile` is
+  now `--profile-id` so it cannot collide with the global `--profile` flag.
+
+### Added — safety controls (spec 06)
+
+- **Emergency stop** (`ksec stop --all`): cancels every non-terminal job,
+  blocks new submissions, preserves evidence/state, and records an audit
+  event. The flag is persisted in the database so it survives process
+  restarts; `ksec stop --status` / `ksec stop --reset` manage it
+  (migration `013`).
+- **Rate limiting**: `[safety] rate_limit_per_minute` (global) and
+  `rate_limit_per_user` sliding-window caps enforced at job submission;
+  denials are audited (`policy.rate_limited`).
+- **Lab mode** config flag (`[safety] lab_mode`) alongside safe/read-only.
+
+### Added — data model completion (spec 05)
+
+- **Evidence chain of custody** (migration `012`): every capture/verify/state
+  change is appended to `evidence_custody`; `ksec evidence custody <id>`
+  shows the full chain and integrity failures are recorded.
+- **Case notes, timeline and reopen** (migration `012`): `ksec case note
+  add|list`, `ksec case timeline`, `ksec case reopen --reason` — notes are
+  append-only and every state change lands in the case timeline.
+- **Finding lifecycle**: `ksec finding update <id> --status` (incl.
+  `accepted_risk`), `ksec finding remediate` (owner/priority/due), and
+  `ksec finding verify` — a separate verification record is required before
+  a finding is marked `verified` (spec 05 #38).
+- **Database introspection**: `ksec db version|health|repair` (integrity
+  check, foreign keys, migrations, storage, WAL checkpoint + reindex).
+- **Auditable exports**: `ksec export case|findings|evidence|assets` — JSON
+  with schema/export versioning, provenance and chain-of-custody included.
+
+### Added — new modules (spec 08)
+
+- **GRC/Compliance** (`ksec grc`): NIST 800-53, CIS, OWASP, ISO/IEC 27001,
+  SOC 2 and PCI DSS control mappings (versioned) over deterministic checks
+  (audit, scope, authorization, evidence integrity, backups, TLS, headers,
+  banners). `ksec grc check` stores every run as evidence + audit.
+- **Malware analysis** (`ksec malware analyze`): static-only pipeline
+  (hash, format detection PE/ELF/Mach-O/ZIP/PDF/script, strings, entropy),
+  hashes auto-registered as IOCs, analysis stored as evidence — the sample
+  is never executed.
+- **Endpoint security** (`ksec endpoint`): read-only local inventory
+  (host, processes, users, listening sockets) parsed from `/proc`;
+  passive `check` flags root-equivalent accounts and exposed listeners and
+  can create findings.
+- Knowledge base grew to 52 topics (grc, malware, endpoint, stop-emergency,
+  role-blackhat). `ksec role blackhat` is the black-hat mindset playbook —
+  full kill-chain emulation that stays inside engagement scope (controlled
+  adversary simulation, spec 06 #28).
+- 414 unit tests + QA gate (compile/AST/marker/knowledge sweeps).
+
 ## [0.3.0] - 2026-09-04 — real-use power round
 
 ### Added — SOC intake & forensics round

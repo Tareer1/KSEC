@@ -24,7 +24,10 @@ from ksec.db.connection import Database
 from ksec.db.migrations import MigrationRunner
 from ksec.dfir.service import DfirService
 from ksec.evidence.service import EvidenceService
+from ksec.endpoint.service import EndpointService
 from ksec.findings.service import FindingService
+from ksec.grc.service import GrcService
+from ksec.malware.service import MalwareService
 from ksec.installer.service import ToolInstallManager
 from ksec.jobs.models import JobRepository
 from ksec.knowledge.service import KnowledgeService
@@ -95,6 +98,9 @@ class KsecContext:
     vuln: VulnService
     atomic: AtomicService
     updates: UpdateService
+    grc: GrcService
+    malware: MalwareService
+    endpoint: EndpointService
 
     def close(self) -> None:
         self.scheduler.stop()
@@ -168,6 +174,10 @@ def bootstrap(overrides: dict | None = None, run_migrations: bool = True) -> Kse
         notifications=notifications,
     )
 
+    grc = GrcService(db, audit, config=config, evidence=evidence, vuln=vuln, backups=backups)
+    malware = MalwareService(db, evidence=evidence, intel=intel, findings=findings, audit=audit)
+    endpoint = EndpointService(db, findings=findings, audit=audit)
+
     return KsecContext(
         config=config,
         db=db,
@@ -207,4 +217,7 @@ def bootstrap(overrides: dict | None = None, run_migrations: bool = True) -> Kse
     vuln=vuln,
     atomic=atomic,
     updates=updates,
+    grc=grc,
+    malware=malware,
+    endpoint=endpoint,
     )

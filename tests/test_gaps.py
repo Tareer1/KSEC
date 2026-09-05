@@ -1,0 +1,752 @@
+"""Tests for the gap-closing round (safety controls, data model completion,
+GRC, malware and endpoint modules). All AI-free, stdlib only.
+"""
+from __future__ import annotations
+
+import json
+import os
+import pathlib
+import tempfile
+
+from ksec.core.errors import KSECError
+from tests import KsecTestCase
+
+
+class EmergencyStopTest(KsecTestCase):
+    def setUp(self):
+        super().setUp()
+        self.ctx = self.make_context()
+
+    def tearDown(self):
+        self.ctx.close()
+        super().tearDown()
+
+    def test_stop_blocks_new_submissions(self):
+        result = self.ctx.scheduler.emergency_stop(actor="test")
+        self.assertTrue(result["stopped"])
+        self.assertTrue(self.ctx.scheduler.is_emergency_stopped())
+        with self.assertRaises(KSECError):
+            self.ctx.scheduler.submit(capability="test_scan", target="10.0.0.5")
+
+    def test_stop_cancels_queued_jobs(self):
+        job = self.ctx.scheduler.submit(capability="test_scan", target="10.0.0.5")
+        result = self.ctx.scheduler.emergency_stop(actor="test")
+        self.assertIn(job.id, result["cancelled_jobs"])
+        updated = self.ctx.jobs.get(job.id)
+        self.assertEqual(updated.state, "CANCELLED")
+
+    def test_stop_reset_reopens_submissions(self):
+        self.ctx.scheduler.emergency_stop(actor="test")
+        self.ctx.scheduler.emergency_stop_clear(actor="test")
+        self.assertFalse(self.ctx.scheduler.is_emergency_stopped())
+        job = self.ctx.scheduler.submit(capability="test_scan", target="10.0.0.5")
+        self.assertIsNotNone(job)
+
+    def test_stop_persists_across_restart(self):
+        """The emergency stop survives a fresh bootstrap (process restart)."""
+        self.ctx.scheduler.emergency_stop(actor="test")
+        self.ctx.close()
+        fresh = self.make_context()
+        try:
+            self.assertTrue(fresh.scheduler.is_emergency_stopped())
+            with self.assertRaises(KSECError):
+                fresh.scheduler.submit(capability="test_scan", target="10.0.0.5")
+        finally:
+            fresh.close()
+
+
+class RateLimitTest(KsecTestCase):
+    def setUp(self):
+        super().setUp()
+        self.ctx = self.make_context({"safety": {"rate_limit_per_user": 2}})
+        from ksec.identity.users import UserRepository
+
+        users = UserRepository(self.ctx.db)
+        self.user1 = users.create("user1", "pw1")
+        self.user2 = users.create("user2", "pw2")
+
+    def tearDown(self):
+        self.ctx.close()
+        super().tearDown()
+
+    def test_per_user_rate_limit_blocks_third_submission(self):
+        self.ctx.scheduler.submit(capability="test_scan", target="10.0.0.1", user_id=self.user1.id)
+        self.ctx.scheduler.submit(capability="test_scan", target="10.0.0.2", user_id=self.user1.id)
+        with self.assertRaises(KSECError):
+            self.ctx.scheduler.submit(capability="test_scan", target="10.0.0.3", user_id=self.user1.id)
+
+    def test_rate_limit_is_per_user(self):
+        self.ctx.scheduler.submit(capability="test_scan", target="10.0.0.1", user_id=self.user1.id)
+        self.ctx.scheduler.submit(capability="test_scan", target="10.0.0.2", user_id=self.user1.id)
+        # A different user is not blocked by user 1's limit.
+        job = self.ctx.scheduler.submit(capability="test_scan", target="10.0.0.3", user_id=self.user2.id)
+        self.assertIsNotNone(job)
+
+
+class EvidenceCustodyTest(KsecTestCase):
+    def setUp(self):
+        super().setUp()
+        self.ctx = self.make_context()
+
+    def tearDown(self):
+        self.ctx.close()
+        super().tearDown()
+
+    def test_capture_and_verify_record_custody(self):
+        evidence = self.ctx.evidence.add("port 22 open", tool="nmap", operator="alice")
+        ok, _ = self.ctx.evidence.verify(evidence.id)
+        self.assertTrue(ok)
+        events = self.ctx.evidence.custody_log(evidence.id)
+        actions = [e.action for e in events]
+        self.assertIn("CAPTURED", actions)
+        self.assertIn("VERIFIED", actions)
+
+    def test_verify_failure_records_integrity_failure(self):
+        evidence = self.ctx.evidence.add("intact content", tool="manual", operator="bob")
+        # Tamper with the stored content directly (simulates external change).
+        self.ctx.db.execute(
+            "UPDATE evidence SET content = ? WHERE id = ?",
+            ("modified content", evidence.id),
+        )
+        ok, _ = self.ctx.evidence.verify(evidence.id)
+        self.assertFalse(ok)
+        events = self.ctx.evidence.custody_log(evidence.id)
+        self.assertEqual(events[-1].new_state, "integrity_failure")
+
+
+class CaseNotesTimelineTest(KsecTestCase):
+    def setUp(self):
+        super().setUp()
+        self.ctx = self.make_context()
+
+    def tearDown(self):
+        self.ctx.close()
+        super().tearDown()
+
+    def test_notes_and_timeline(self):
+        case = self.ctx.cases.create(title="incident-1", owner="alice")
+        note = self.ctx.cases.add_note(case.id, "first observation", author="alice")
+        self.assertIsNotNone(note.id)
+        self.assertEqual(len(self.ctx.cases.notes(case.id)), 1)
+        events = self.ctx.cases.events(case.id)
+        types = [e.event_type for e in events]
+        self.assertIn("created", types)
+        self.assertIn("note", types)
+
+    def test_reopen_records_reason(self):
+        case = self.ctx.cases.create(title="incident-2")
+        self.ctx.cases.close(case.id)
+        reopened = self.ctx.cases.reopen(case.id, reason="new evidence arrived")
+        self.assertEqual(reopened.status, "open")
+        events = self.ctx.cases.events(case.id)
+        self.assertEqual(events[-1].event_type, "reopen")
+        self.assertIn("new evidence", events[-1].details)
+
+
+class RemediationTest(KsecTestCase):
+    def setUp(self):
+        super().setUp()
+        self.ctx = self.make_context()
+
+    def tearDown(self):
+        self.ctx.close()
+        super().tearDown()
+
+    def test_remediation_lifecycle(self):
+        finding = self.ctx.findings.create(title="weak tls", severity="high")
+        rem = self.ctx.findings.add_remediation(
+            finding.id, description="upgrade tls", owner="ops", priority="high"
+        )
+        self.assertEqual(rem.status, "open")
+        verification = self.ctx.findings.verify_remediation(
+            rem.id, method="retest", result="verified", verified_by="analyst"
+        )
+        self.assertEqual(verification.result, "verified")
+        updated = self.ctx.findings.get(finding.id)
+        self.assertEqual(updated.status, "verified")
+
+    def test_verify_failed_keeps_finding_open(self):
+        finding = self.ctx.findings.create(title="still broken", severity="high")
+        rem = self.ctx.findings.add_remediation(finding.id, description="fix")
+        self.ctx.findings.verify_remediation(rem.id, result="failed", verified_by="analyst")
+        self.assertEqual(self.ctx.findings.get(finding.id).status, "open")
+
+    def test_verifications_list(self):
+        finding = self.ctx.findings.create(title="x", severity="low")
+        rem = self.ctx.findings.add_remediation(finding.id, description="fix")
+        self.ctx.findings.verify_remediation(rem.id, result="verified")
+        self.assertEqual(len(self.ctx.findings.verifications(rem.id)), 1)
+
+
+class GrcTest(KsecTestCase):
+    def setUp(self):
+        super().setUp()
+        self.ctx = self.make_context()
+
+    def tearDown(self):
+        self.ctx.close()
+        super().tearDown()
+
+    def test_frameworks_and_controls(self):
+        from ksec.grc.frameworks import controls, frameworks
+
+        fws = frameworks()
+        self.assertIn("NIST 800-53", fws)
+        self.assertIn("PCI DSS", fws)
+        self.assertGreater(len(controls("OWASP")), 0)
+
+    def test_snapshot_stores_evidence_and_audit(self):
+        result = self.ctx.grc.snapshot(actor="test")
+        self.assertIsNotNone(result["evidence_id"])
+        self.assertGreater(len(result["payload"]["checks"]), 0)
+        events = self.ctx.audit.list(event_type="grc.snapshot")
+        self.assertEqual(len(events), 1)
+
+    def test_status_counts(self):
+        data = self.ctx.grc.status()
+        self.assertIn("passed", data)
+        self.assertIn("failed", data)
+        self.assertIn("controls", data)
+
+
+class MalwareTest(KsecTestCase):
+    def setUp(self):
+        super().setUp()
+        self.ctx = self.make_context()
+
+    def tearDown(self):
+        self.ctx.close()
+        super().tearDown()
+
+    def _write_sample(self, content: bytes) -> str:
+        path = os.path.join(self.tmp_dir, "sample.bin")
+        with open(path, "wb") as fh:
+            fh.write(content)
+        return path
+
+    def test_analyze_pe_sample(self):
+        # Minimal MZ+PE header stub: e_lfanew (at 0x3C) = 0x40, then the PE
+        # signature at 0x40 followed by machine=0x14c (x86) at 0x44.
+        stub = (b"MZ" + b"\x00" * 0x3A + b"\x40\x00\x00\x00"
+                + b"PE\x00\x00" + b"\x4c\x01" + b"\x00" * 100)
+        path = self._write_sample(stub)
+        result = self.ctx.malware.analyze(path, actor="test")
+        self.assertEqual(result.file_format, "PE")
+        self.assertEqual(result.pe_machine, "x86")
+        self.assertEqual(len(result.sha256), 64)
+
+    def test_analyze_registers_iocs_and_evidence(self):
+        path = self._write_sample(b"#!/bin/sh\necho evil-c2.top\nexfil data\n" * 10)
+        result = self.ctx.malware.analyze(path, actor="test")
+        iocs = self.ctx.intel.list_iocs(ioc_type="HASH")
+        self.assertGreaterEqual(len(iocs), 3)  # sha256 + sha1 + md5
+        evidence = self.ctx.evidence.list()
+        self.assertGreaterEqual(len(evidence), 1)
+
+    def test_analyze_script_detects_strings(self):
+        path = self._write_sample(b"#!/usr/bin/python3\nprint('call home http://c2.example/x')\n")
+        result = self.ctx.malware.analyze(path, actor="test")
+        self.assertEqual(result.file_format, "SCRIPT")
+        self.assertTrue(any("c2.example" in s for s in result.strings_ascii))
+
+    def test_missing_file_raises(self):
+        with self.assertRaises(FileNotFoundError):
+            self.ctx.malware.analyze(os.path.join(self.tmp_dir, "nope.bin"), actor="test")
+
+
+class EndpointTest(KsecTestCase):
+    def setUp(self):
+        super().setUp()
+        self.ctx = self.make_context()
+
+    def tearDown(self):
+        self.ctx.close()
+        super().tearDown()
+
+    def test_host_inventory(self):
+        host = self.ctx.endpoint.host_inventory()
+        self.assertTrue(host.hostname)
+        self.assertGreaterEqual(host.cpu_count, 1)
+        self.assertIn(host.architecture, ("x86_64", "amd64", "aarch64", "arm64", "armv7l", "i386", "x86", "ppc64le", "s390x", "riscv64", "loongarch64"))
+
+    def test_process_and_user_inventory(self):
+        procs = self.ctx.endpoint.processes()
+        self.assertGreater(len(procs), 0)
+        users = self.ctx.endpoint.users()
+        self.assertGreater(len(users), 0)
+
+    def test_check_runs_without_error(self):
+        data = self.ctx.endpoint.check(create_findings=False)
+        self.assertIn("host", data)
+        self.assertIn("observations", data)
+
+
+class DbCliTest(KsecTestCase):
+    def setUp(self):
+        super().setUp()
+        self.ctx = self.make_context()
+
+    def tearDown(self):
+        self.ctx.close()
+        super().tearDown()
+
+    def test_version_and_health(self):
+        from ksec.bootstrap import MIGRATIONS_DIR
+        from ksec.cli.db import cmd_db_health, cmd_db_version
+        from ksec.db.migrations import MigrationRunner
+
+        runner = MigrationRunner(self.ctx.db, MIGRATIONS_DIR)
+
+        class Args:
+            json = True
+            quiet = False
+
+        import io
+        import sys
+
+        old = sys.stdout
+        sys.stdout = io.StringIO()
+        try:
+            rc = cmd_db_version(self.ctx, Args())
+            rc_health = cmd_db_health(self.ctx, Args())
+        finally:
+            sys.stdout = old
+        self.assertEqual(rc, 0)
+        self.assertEqual(rc_health, 0)
+        latest = max(int(f.name.split("_")[0]) for f in MIGRATIONS_DIR.glob("[0-9][0-9][0-9]_*.sql"))
+        self.assertEqual(runner.current_version(), latest)
+
+    def test_repair_without_yes_reports_but_returns_ok_when_healthy(self):
+        from ksec.cli.db import cmd_db_repair
+
+        class Args:
+            json = True
+            quiet = False
+            yes = False
+
+        import io
+        import sys
+
+        old = sys.stdout
+        sys.stdout = io.StringIO()
+        try:
+            rc = cmd_db_repair(self.ctx, Args())
+        finally:
+            sys.stdout = old
+        self.assertEqual(rc, 0)
+
+
+class ExportTest(KsecTestCase):
+    def setUp(self):
+        super().setUp()
+        self.ctx = self.make_context()
+
+    def tearDown(self):
+        self.ctx.close()
+        super().tearDown()
+
+    def test_export_findings_and_evidence(self):
+        from ksec.cli.export import cmd_export_evidence, cmd_export_findings
+
+        self.ctx.findings.create(title="tls weak", severity="high")
+        self.ctx.evidence.add("output", tool="nmap", operator="alice")
+
+        import io
+        import sys
+
+        class Args:
+            engagement = None
+            out = None
+            json = True
+            quiet = False
+
+        out_buf = io.StringIO()
+        old = sys.stdout
+        sys.stdout = out_buf
+        try:
+            rc_f = cmd_export_findings(self.ctx, Args())
+            rc_e = cmd_export_evidence(self.ctx, Args())
+        finally:
+            sys.stdout = old
+        self.assertEqual(rc_f, 0)
+        self.assertEqual(rc_e, 0)
+        # Both exports are valid JSON with a source field. The CLI prints one
+        # indented JSON document per export, so parse them separately.
+        captured = out_buf.getvalue().strip()
+        docs = json.JSONDecoder().raw_decode(captured)[0]
+        self.assertIn("source_system", docs)
+        self.assertIn("records", docs)
+        # A second export follows the first (whitespace + another document).
+        rest = captured[json.JSONDecoder().raw_decode(captured)[1]:].strip()
+        self.assertTrue(rest)
+        second = json.JSONDecoder().raw_decode(rest)[0]
+        self.assertIn("source_system", second)
+
+    def test_export_case_unknown(self):
+        from ksec.cli.export import cmd_export_case
+
+        class Args:
+            case = 999
+            out = None
+            json = True
+            quiet = False
+
+        import io
+        import sys
+
+        old = sys.stdout
+        sys.stdout = io.StringIO()
+        try:
+            rc = cmd_export_case(self.ctx, Args())
+        finally:
+            sys.stdout = old
+        self.assertEqual(rc, 1)
+
+class TimeBoundEngagementTest(KsecTestCase):
+    """Time-bound authorization windows (spec 06#54)."""
+
+    def setUp(self):
+        super().setUp()
+        self.ctx = self.make_context()
+
+    def tearDown(self):
+        self.ctx.close()
+        super().tearDown()
+
+    def test_engagement_with_no_window_is_active(self):
+        eng = self.ctx.authz.create_engagement("always")
+        self.assertEqual(eng.window_status, "no-window")
+
+    def test_future_window_not_yet_valid(self):
+        eng = self.ctx.authz.create_engagement(
+            "future", valid_from="2999-01-01", valid_until="2999-12-31"
+        )
+        self.assertEqual(eng.window_status, "not-yet-valid")
+        ok, reason = self.ctx.authz.is_target_authorized(eng.id, "10.0.0.5")
+        self.assertFalse(ok)
+        self.assertIn("not valid until", reason)
+
+    def test_past_window_expired(self):
+        eng = self.ctx.authz.create_engagement(
+            "past", valid_until="2020-01-01"
+        )
+        self.assertEqual(eng.window_status, "expired")
+        ok, reason = self.ctx.authz.is_target_authorized(eng.id, "10.0.0.5")
+        self.assertFalse(ok)
+        self.assertIn("expired", reason)
+
+    def test_open_window_allows_scope_match(self):
+        eng = self.ctx.authz.create_engagement(
+            "current", valid_until="2999-12-31"
+        )
+        self.ctx.authz.add_authorization(eng.id, "10.0.0.0/8")
+        ok, reason = self.ctx.authz.is_target_authorized(eng.id, "10.0.0.5")
+        self.assertTrue(ok, reason)
+
+    def test_invalid_timestamp_rejected(self):
+        with self.assertRaises(Exception):
+            self.ctx.authz.create_engagement("bad", valid_until="not-a-date")
+
+
+class LabModeTest(KsecTestCase):
+    """Lab/CTF mode restricts targets to lab ranges (spec 06#56)."""
+
+    def setUp(self):
+        super().setUp()
+        self.ctx = self.make_context(
+            {"safety": {"lab_mode": True}}
+        )
+        self.user = self._admin()
+
+    def tearDown(self):
+        self.ctx.close()
+        super().tearDown()
+
+    def _admin(self):
+        from ksec.identity.users import UserRepository
+
+        users = UserRepository(self.ctx.db)
+        user = users.create("labadmin", "lab123", display_name="Lab Admin")
+        self.ctx.rbac.assign_role(user.id, "admin")
+        return user
+
+    def setUp(self):
+        super().setUp()
+        self.ctx = self.make_context({"safety": {"lab_mode": True}})
+        self.user = self._admin()
+        # A lab-scoped engagement so policy reaches the lab gate (the scope
+        # check runs before it, as in the real CLI flow).
+        self.eng = self.ctx.authz.create_engagement("lab")
+        self.ctx.authz.add_authorization(self.eng.id, "*")
+
+    def tearDown(self):
+        self.ctx.close()
+        super().tearDown()
+
+    def _admin(self):
+        from ksec.identity.users import UserRepository
+
+        users = UserRepository(self.ctx.db)
+        user = users.create("labadmin", "lab123", display_name="Lab Admin")
+        self.ctx.rbac.assign_role(user.id, "admin")
+        return user
+
+    def _decision(self, target):
+        return self.ctx.policy.evaluate(
+            user=self.user,
+            action="recon.run",
+            target=target,
+            engagement_id=self.eng.id,
+        )
+
+    def test_public_target_denied(self):
+        result = self._decision("example.com")
+        self.assertNotEqual(result.decision.value, "ALLOW")
+        self.assertIn("Lab/CTF", result.reason)
+
+    def test_private_ip_allowed(self):
+        result = self._decision("10.0.0.5")
+        self.assertEqual(result.decision.value, "ALLOW")
+
+    def test_lab_hostname_allowed(self):
+        result = self._decision("vulnlab.test")
+        self.assertEqual(result.decision.value, "ALLOW")
+
+    def test_lab_off_public_allowed(self):
+        from ksec.identity.users import UserRepository
+
+        ctx = self.make_context({"safety": {"lab_mode": False}})
+        try:
+            users = UserRepository(ctx.db)
+            user = users.create("openadmin", "open123")
+            ctx.rbac.assign_role(user.id, "admin")
+            eng = ctx.authz.create_engagement("lab")
+            ctx.authz.add_authorization(eng.id, "*")
+            result = ctx.policy.evaluate(
+                user=user,
+                action="recon.run",
+                target="example.com",
+                engagement_id=eng.id,
+            )
+            # Without lab mode the public target passes policy.
+            self.assertNotIn("Lab/CTF", result.reason)
+            self.assertEqual(result.decision.value, "ALLOW")
+        finally:
+            ctx.close()
+
+
+class WorkflowDagTest(KsecTestCase):
+    """Workflow DAG dependencies, retry and versioning (spec 07)."""
+
+    def setUp(self):
+        super().setUp()
+        self.ctx = self.make_context()
+        self.store = self.ctx.workflow_store
+
+    def tearDown(self):
+        self.ctx.close()
+        super().tearDown()
+
+    def test_workflow_with_depends_on_created_at_version_1(self):
+        wf = self.store.create(
+            "dagflow",
+            [
+                {"capability": "dns_lookup", "name": "step1"},
+                {"capability": "port_scan", "name": "step2", "depends_on": ["step1"]},
+            ],
+        )
+        self.assertEqual(wf.version, 1)
+
+    def test_edit_bumps_version(self):
+        self.store.create("dagflow", [{"capability": "dns_lookup", "name": "step1"}])
+        updated = self.store.update("dagflow", description="changed")
+        self.assertEqual(updated.version, 2)
+
+    def test_cycle_rejected(self):
+        with self.assertRaises(KSECError) as cm:
+            self.store.create(
+                "cyclic",
+                [
+                    {"capability": "dns_lookup", "name": "a", "depends_on": ["b"]},
+                    {"capability": "port_scan", "name": "b", "depends_on": ["a"]},
+                ],
+            )
+        self.assertIn("cycle", str(cm.exception))
+
+    def test_unknown_dep_rejected(self):
+        with self.assertRaises(KSECError) as cm:
+            self.store.create(
+                "baddep",
+                [{"capability": "dns_lookup", "name": "a", "depends_on": ["ghost"]}],
+            )
+        self.assertIn("ghost", str(cm.exception))
+
+    def test_to_definition_preserves_dag_fields(self):
+        wf = self.store.create(
+            "dagflow",
+            [
+                {"capability": "dns_lookup", "name": "s1"},
+                {"capability": "port_scan", "name": "s2", "depends_on": ["s1"], "retry": 3, "retry_delay": 2.5},
+            ],
+        )
+        definition = wf.to_definition()
+        self.assertEqual(definition.version, 1)
+        self.assertEqual(definition.steps[1].depends_on, ("s1",))
+        self.assertEqual(definition.steps[1].retry, 3)
+        self.assertEqual(definition.steps[1].retry_delay, 2.5)
+        snapshot = definition.as_snapshot()
+        self.assertEqual(snapshot["steps"][1]["depends_on"], ["s1"])
+
+    def test_topological_order_respects_dependencies(self):
+        from ksec.workflows.definitions import WorkflowDefinition, WorkflowStep
+
+        definition = WorkflowDefinition(
+            name="dag",
+            description="",
+            steps=(
+                WorkflowStep("dns_lookup", name="first"),
+                WorkflowStep("port_scan", name="last", depends_on=("first",)),
+                WorkflowStep("http_probe", name="mid", depends_on=("first",)),
+            ),
+        )
+        ordered = self.ctx.workflows._topological_order(definition)
+        positions = {step.name: i for i, (idx, step) in enumerate(ordered)}
+        self.assertLess(positions["first"], positions["last"])
+        self.assertLess(positions["first"], positions["mid"])
+
+    def test_definition_snapshot_version_recorded_in_run(self):
+        """An executed run records definition version + immutable snapshot."""
+        from ksec.identity.users import UserRepository
+
+        users = UserRepository(self.ctx.db)
+        user = users.create("wfuser", "wf123")
+        self.ctx.rbac.assign_role(user.id, "admin")
+        eng = self.ctx.authz.create_engagement("wf")
+        self.ctx.authz.add_authorization(eng.id, "10.0.0.5")
+        self.store.create(
+            "dagflow",
+            [
+                {"capability": "test_scan", "name": "s1"},
+                {"capability": "test_scan", "name": "s2", "depends_on": ["s1"]},
+            ],
+        )
+        definition = self.store.resolve("dagflow")
+        session = self.ctx.sessions.open(user, "RED_TEAM", role_name="admin")
+        run = self.ctx.workflows.run(
+            definition, user=user, session=session, target="10.0.0.5", engagement_id=eng.id
+        )
+        self.assertEqual(run.status, "completed")
+        rows = self.ctx.workflows.runs()
+        self.assertEqual(rows[0]["definition_version"], 1)
+        snapshot = json.loads(rows[0]["definition_snapshot"])
+        self.assertEqual(snapshot["name"], "dagflow")
+        self.assertEqual([s["name"] for s in snapshot["steps"]], ["s1", "s2"])
+
+
+class SessionSwitchTest(KsecTestCase):
+    """ksec session switch / reconnect (spec 07#31-32)."""
+
+    def setUp(self):
+        super().setUp()
+        self.ctx = self.make_context()
+        from ksec.identity.users import UserRepository
+
+        users = UserRepository(self.ctx.db)
+        self.user = users.create("swuser", "sw123")
+        self.ctx.rbac.assign_role(self.user.id, "admin")
+        self.s1 = self.ctx.sessions.open(self.user, "RED_TEAM", role_name="admin")
+        self.s2 = self.ctx.sessions.open(self.user, "BLUE_TEAM", role_name="admin")
+
+    def tearDown(self):
+        self.ctx.close()
+        super().tearDown()
+
+    def test_switch_activates_target_and_pauses_others(self):
+        switched = self.ctx.sessions.switch(self.user, self.s2.id)
+        self.assertEqual(switched.state, "ACTIVE")
+        first = self.ctx.sessions.get(self.s1.id)
+        self.assertEqual(first.state, "PAUSED")
+
+    def test_reconnect_resumes_paused_session(self):
+        self.ctx.sessions.switch(self.user, self.s2.id)
+        reconnected = self.ctx.sessions.reconnect(self.user, self.s1.id)
+        self.assertEqual(reconnected.state, "ACTIVE")
+
+    def test_switch_rejects_foreign_session(self):
+        from ksec.core.errors import SessionError
+
+        users = self.ctx.rbac.db  # noqa - keep reference pattern simple
+        from ksec.identity.users import UserRepository
+
+        other_repo = UserRepository(self.ctx.db)
+        other = other_repo.create("other", "other123")
+        self.ctx.rbac.assign_role(other.id, "operator")
+        foreign = self.ctx.sessions.open(other, "LEARN_WORK", role_name="operator")
+        with self.assertRaises(SessionError):
+            self.ctx.sessions.switch(self.user, foreign.id)
+
+
+class ModeCliTest(KsecTestCase):
+    """ksec mode status + set toggling the config file."""
+
+    def setUp(self):
+        super().setUp()
+        self.ctx = self.make_context()
+
+    def tearDown(self):
+        self.ctx.close()
+        super().tearDown()
+
+    def _run(self, argv):
+        from ksec.main import build_parser
+
+        parser = build_parser()
+        args = parser.parse_args(argv)
+        return args.func(self.ctx, args)
+
+    def test_mode_status_lists_safety_flags(self):
+        import io
+        import sys
+
+        from ksec.cli.mode import cmd_mode_status
+
+        class Args:
+            json = True
+            quiet = False
+            mode = None
+
+        buffer = io.StringIO()
+        old = sys.stdout
+        sys.stdout = buffer
+        try:
+            rc = cmd_mode_status(self.ctx, Args())
+        finally:
+            sys.stdout = old
+        self.assertEqual(rc, 0)
+        data = json.loads(buffer.getvalue())
+        self.assertIn("lab_mode", data["safety"])
+
+    def test_mode_toggle_writes_config_and_reloads(self):
+        from ksec.config.loader import KsecConfig
+
+        path = self.ctx.config.source or pathlib.Path(self.tmp_dir) / "config.toml"
+        from ksec.cli.mode import _toggle_config
+
+        _toggle_config(pathlib.Path(path), "lab_mode", True)
+        reloaded = KsecConfig.load()
+        self.assertTrue(reloaded.lab_mode)
+
+    def test_mode_set_via_cli_persists_without_duplicate_tables(self):
+        """Toggling two keys on the same file keeps one [safety] table."""
+        from ksec.cli.mode import _toggle_config
+
+        path = self.ctx.config.source or pathlib.Path(self.tmp_dir) / "config.toml"
+        pathlib.Path(path).write_text(
+            "[safety]\nsafe_mode = false\n", encoding="utf-8"
+        )
+        _toggle_config(path, "lab_mode", True)
+        _toggle_config(path, "read_only", True)
+        text = pathlib.Path(path).read_text(encoding="utf-8")
+        self.assertEqual(text.count("[safety]"), 1)
+        self.assertIn("lab_mode = true", text)
+        self.assertIn("read_only = true", text)

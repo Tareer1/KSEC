@@ -55,6 +55,7 @@ def cmd_workflow_list(ctx: KsecContext, args) -> int:
                 "description": workflow.description,
                 "source": "custom",
                 "enabled": workflow.enabled,
+                "version": workflow.version,
                 "steps": [s["capability"] for s in workflow.steps],
             }
         )
@@ -68,7 +69,8 @@ def cmd_workflow_list(ctx: KsecContext, args) -> int:
             print("no workflows")
         for d in data:
             mark = "ok " if d.get("enabled", True) else "-- "
-            print(f"{mark} {d['name']:<24} [{d['source']:<7}] {d['description']}")
+            version = f" v{d['version']}" if "version" in d else ""
+            print(f"{mark} {d['name']:<24} [{d['source']:<7}]{version:<5} {d['description']}")
     return 0
 
 
@@ -221,12 +223,29 @@ def cmd_workflow_history(ctx: KsecContext, args) -> int:
             "workflow": r["workflow"],
             "target": r["target"],
             "status": r["status"],
+            "version": r["definition_version"],
+            "snapshot": json.loads(r["definition_snapshot"] or "{}"),
             "steps": f"{r['steps_completed']}/{r['steps_total']}",
             "created_at": r["created_at"],
             "error": r["error"],
         }
         for r in rows
     ]
+    if args.json:
+        emit(data, True, False)
+        return 0
+    elif args.quiet:
+        for d in data:
+            print(d["run_id"])
+    else:
+        if not data:
+            print("no workflow runs")
+        for d in data:
+            print(
+                f"{d['run_id'][:12]:<12} {d['workflow']:<16} {d['target']:<20}"
+                f" {d['status']:<10} v{d['version']} steps={d['steps']}"
+            )
+    return 0
     if args.json:
         emit(data, True, False)
     elif args.quiet:

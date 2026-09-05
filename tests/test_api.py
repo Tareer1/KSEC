@@ -60,9 +60,14 @@ class ApiTest(KsecTestCase):
         self.assertEqual(status, 401)
 
     def test_status_endpoint(self):
+        from pathlib import Path
+
+        from ksec.bootstrap import MIGRATIONS_DIR
+
         status, body = _request("GET", f"{self.base}/api/v1/status", token=self._token())
         self.assertEqual(status, 200)
-        self.assertEqual(body["db_version"], 11)
+        latest = max(int(f.name.split("_")[0]) for f in MIGRATIONS_DIR.glob("[0-9][0-9][0-9]_*.sql"))
+        self.assertEqual(body["db_version"], latest)
 
     def test_list_endpoints(self):
         token = self._token()

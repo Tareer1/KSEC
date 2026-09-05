@@ -91,6 +91,14 @@ def _authenticated_user(ctx, args):
 
 
 def cmd_job_schedule_add(ctx: KsecContext, args) -> int:
+    if ctx.scheduler.is_emergency_stopped():
+        emit(
+            "schedule refused: emergency stop is active "
+            "(use `ksec stop --reset` to accept new work)",
+            args.json,
+            args.quiet,
+        )
+        return 1
     try:
         user = _authenticated_user(ctx, args)
     except KSECError as exc:

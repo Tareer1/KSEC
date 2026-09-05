@@ -70,3 +70,33 @@ def cmd_session_resume(ctx: KsecContext, args) -> int:
     session = ctx.sessions.resume(args.id)
     emit(_session_dict(session), args.json, args.quiet)
     return 0
+
+
+def cmd_session_switch(ctx: KsecContext, args) -> int:
+    try:
+        user = _authenticate(ctx, args)
+    except Exception as exc:
+        emit(str(exc), args.json, args.quiet)
+        return 1
+    try:
+        session = ctx.sessions.switch(user, args.id)
+    except Exception as exc:
+        emit(str(exc), args.json, args.quiet)
+        return 1
+    emit(_session_dict(session), args.json, args.quiet)
+    return 0
+
+
+def cmd_session_reconnect(ctx: KsecContext, args) -> int:
+    try:
+        user = _authenticate(ctx, args)
+    except Exception as exc:
+        emit(str(exc), args.json, args.quiet)
+        return 1
+    try:
+        session = ctx.sessions.reconnect(user, args.id)
+    except Exception as exc:
+        emit(str(exc), args.json, args.quiet)
+        return 1
+    emit(_session_dict(session), args.json, args.quiet)
+    return 0

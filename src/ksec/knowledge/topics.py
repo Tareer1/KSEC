@@ -888,6 +888,51 @@ TOPICS: tuple[Topic, ...] = (
         ),
     ),
     Topic(
+        id="role-blackhat",
+        title="BLACK HAT emulation playbook — the attacker mindset, authorized",
+        kind="role",
+        audience=("red",),
+        summary=(
+            "The black-hat playbook emulates how a real malicious attacker thinks and "
+            "operates — full kill chain, no mercy, worst-case assumptions — so defenders "
+            "see what an actual intrusion looks like. It is CONTROLLED ADVERSARY "
+            "SIMULATION (spec 06#28): every step still runs inside an engagement you "
+            "authorized, never against systems you lack permission to test."
+        ),
+        keywords=("black hat", "blackhat", "hacker", "criminal", "malicious", "kill chain", "initial access", "privilege escalation", "lateral movement", "persistence", "exfiltration", "emulation", "attacker mindset", "black hat kya hai", "blackhat kaise"),
+        sections=(
+            ("p", "STEP 1 — AUTHORIZE (non-negotiable). A real black hat has no permission; a professional emulating one MUST have written scope. Create the engagement first — this playbook refuses to work outside it."),
+            ("cmd", "ksec engagement create --name blackhat-emulation"),
+            ("cmd", "ksec engagement scope add --engagement 1 --target lab-target.example --effect allow"),
+            ("cmd", "ksec engagement scope add --engagement 1 --target 10.0.0.0/8 --effect deny"),
+            ("p", "STEP 2 — RECON like an intruder: enumerate aggressively, assume nothing is private."),
+            ("cmd", "ksec run dns_enum lab-target.example --engagement 1 --user red"),
+            ("cmd", "ksec run port_scan lab-target.example --engagement 1 --user red"),
+            ("cmd", "ksec run web_fingerprint lab-target.example --engagement 1 --user red"),
+            ("cmd", "ksec run osint_harvest lab-target.example --workspace RESEARCH_OSINT"),
+            ("p", "STEP 3 — HUNT WEAKNESSES like an attacker would: version checks, headers, banners, web paths."),
+            ("cmd", "ksec vuln check --engagement 1 --user red lab-target.example"),
+            ("cmd", "ksec run directory_brute lab-target.example --engagement 1 --user red"),
+            ("cmd", "ksec run web_vuln_scan lab-target.example --engagement 1 --user red"),
+            ("cmd", "ksec run wpscan lab-target.example --engagement 1 --user red"),
+            ("p", "STEP 4 — VALIDATE access like a real intrusion (only against in-scope targets): credential/authentication testing, SMB access, TLS gaps."),
+            ("cmd", "ksec run auth_test lab-target.example --engagement 1 --user red"),
+            ("cmd", "ksec run smb_enum lab-target.example --engagement 1 --user red"),
+            ("cmd", "ksec run smb_map lab-target.example --engagement 1 --user red"),
+            ("p", "STEP 5 — EMULATE the full intrusion chain: atomics + adversary exercises model initial access -> persistence -> lateral movement -> exfiltration, and prove whether Blue's detections fire."),
+            ("cmd", "ksec atomic list"),
+            ("cmd", "ksec adversary profile add --name blackhat-ops --threat-actor 'Real-World Intruder' --technique T1190 --technique T1059 --technique T1547 --technique T1021 --technique T1041"),
+            ("cmd", "ksec adversary exercise new --name bh-ex --profile 1 --engagement 1 --user red"),
+            ("cmd", "ksec adversary exercise chain 1 --target lab-target.example --engagement 1 --user red --dry-run"),
+            ("p", "STEP 6 — DOCUMENT the intrusion story: what a real black hat would steal/change, evidence, findings, risk, remediation."),
+            ("cmd", "ksec finding create --title 'Persistence achievable (emulated)' --risk --severity high"),
+            ("cmd", "ksec evidence add --content 'emulated kill chain output' --tool adversary --operator red"),
+            ("cmd", "ksec case create --title 'Black-hat emulation findings' --severity high"),
+            ("cmd", "ksec report create --engagement 1 --format markdown"),
+            ("tip", "This playbook is legal only inside authorized engagements or intentionally vulnerable labs (HTB, TryHackMe, Metasploitable, DVWA). The scope gate is never disabled — 'black hat' here means the MINDSET, not the crime."),
+        ),
+    ),
+    Topic(
         id="role-purple",
         title="PURPLE TEAM / RESEARCHER playbook — OSINT and threat intel",
         kind="role",
@@ -946,6 +991,170 @@ TOPICS: tuple[Topic, ...] = (
         ),
     ),
     Topic(
+        id="grc",
+        title="GRC — compliance frameworks mapped to real checks",
+        kind="module",
+        audience=("all", "blue"),
+        summary=(
+            "ksec grc maps KSEC's deterministic checks (TLS, security headers, audit, "
+            "evidence integrity, backups, scope) to controls of NIST 800-53, CIS, OWASP, "
+            "ISO 27001, SOC 2 and PCI DSS. It never claims certification — only that a "
+            "technical check passed or failed."
+        ),
+        keywords=("grc", "compliance", "framework", "nist", "cis", "owasp", "iso", "soc2", "pci", "audit", "control", "certification", "grc kya hai"),
+        sections=(
+            ("p", "Flow (spec 08#37): Framework -> Control -> Requirement -> Technical Test -> Evidence -> Status -> Gap -> Remediation. Every check run is stored as evidence so the mapping is provable."),
+            ("p", "Targeted checks (TLS, headers, banners) need an in-scope target; platform checks (audit active, evidence integrity, backups, scope) run locally."),
+            ("cmd", "ksec grc frameworks"),
+            ("cmd", "ksec grc controls --framework 'ISO 27001'"),
+            ("cmd", "ksec grc status"),
+            ("cmd", "ksec grc check --target example.com   # stores snapshot as evidence + audit"),
+            ("tip", "A failing control means the check failed, not that you are non-compliant — review the detail line and remediate the underlying issue."),
+        ),
+    ),
+    Topic(
+        id="malware",
+        title="Malware analysis — static triage without execution",
+        kind="module",
+        audience=("all", "blue"),
+        summary=(
+            "ksec malware analyze hashes a sample (SHA-256/1/MD5), detects its format "
+            "(PE/ELF/Mach-O/ZIP/PDF/script), extracts strings, computes entropy, registers "
+            "the hashes as IOCs and stores the analysis as evidence. It NEVER executes the "
+            "sample."
+        ),
+        keywords=("malware", "sample", "hash", "strings", "entropy", "pe", "elf", "analysis", "triage", "virus", "malware analysis", "malware kya hai"),
+        sections=(
+            ("p", "Pipeline (spec 08#22): Sample -> Hash -> Metadata -> Static Analysis -> IOC extraction -> Evidence -> optional Finding. Dynamic/behavioral analysis needs an isolated sandbox and is intentionally not in the core."),
+            ("p", "Entropy above ~7.0 often means packed/encrypted content; unusual strings (URLs, commands) and embedded zip entries are worth investigating."),
+            ("cmd", "ksec malware analyze /evidence/sample.bin"),
+            ("cmd", "ksec malware analyze /evidence/sample.bin --finding   # also create a finding"),
+            ("cmd", "ksec intel ioc list --type HASH   # hashes auto-registered as IOCs"),
+            ("tip", "Pair with DFIR: collect the file as a dfir artifact first, then analyze it and link the analysis evidence."),
+        ),
+    ),
+    Topic(
+        id="endpoint",
+        title="Endpoint security — know the machine you are defending",
+        kind="module",
+        audience=("all", "blue"),
+        summary=(
+            "ksec endpoint inventories the local host read-only: OS/kernel/arch, processes, "
+            "user accounts and listening sockets. It modifies nothing — pure passive "
+            "collection from /proc and /etc, with optional findings for notable "
+            "observations."
+        ),
+        keywords=("endpoint", "host", "process", "user", "port", "socket", "inventory", "os", "kernel", "uptime", "endpoint security"),
+        sections=(
+            ("p", "Useful for blue-team baselining: which accounts exist, what is listening where, and which processes are running — the starting picture for any investigation."),
+            ("p", "'ksec endpoint check' flags root-equivalent login accounts, listening sockets without an owning process, and non-loopback listeners — create findings with --create-findings."),
+            ("cmd", "ksec endpoint inventory"),
+            ("cmd", "ksec endpoint process --limit 50"),
+            ("cmd", "ksec endpoint user"),
+            ("cmd", "ksec endpoint port"),
+            ("cmd", "ksec endpoint check --create-findings"),
+        ),
+    ),
+    Topic(
+        id="stop-emergency",
+        title="Emergency stop — kill every job instantly",
+        kind="workflow",
+        audience=("all",),
+        summary=(
+            "ksec stop --all is the global emergency stop: it cancels every running/queued "
+            "job, blocks new submissions, preserves all evidence and job state, and records "
+            "an audit event. Use it when a run is going wrong and you want everything to "
+            "halt now."
+        ),
+        keywords=("stop", "emergency", "kill", "halt", "abort", "cancel all", "stop --all", "emergency stop"),
+        sections=(
+            ("p", "Jobs are cancelled (never deleted), evidence stays intact, and the audit log records emergency_stop with the cancelled job ids. New submissions are refused until you clear it."),
+            ("cmd", "ksec stop --all"),
+            ("cmd", "ksec stop --status"),
+            ("cmd", "ksec stop --reset"),
+            ("tip", "Rate limiting is configurable in [safety]: rate_limit_per_minute (global) and rate_limit_per_user keep runaway automation in check before you ever need the stop."),
+        ),
+    ),
+    Topic(
+        id="time-bound-auth",
+        title="Time-bound authorization — engagements with an expiry",
+        kind="workflow",
+        audience=("all",),
+        summary=(
+            "An engagement can carry a validity window (--valid-from / --valid-until). "
+            "Before it starts or after it expires, every target action is refused at the "
+            "policy gate — even when a scope rule matches (spec 06#54)."
+        ),
+        keywords=("time-bound", "validity", "valid-from", "valid-until", "expiry", "expired", "window", "engagement window", "authorization window"),
+        sections=(
+            ("p", "Flow: create the engagement with a window, add your scope rules, and KSEC automatically blocks runs once the window closes — no manual revocation needed."),
+            ("cmd", "ksec engagement create --name q1 --valid-from 2026-01-01 --valid-until 2026-12-31"),
+            ("cmd", "ksec engagement list      # flags [not-yet-valid] / [expired]"),
+            ("tip", "Timestamps accept ISO-8601: full datetimes or plain dates (YYYY-MM-DD, treated as UTC midnight)."),
+        ),
+    ),
+    Topic(
+        id="lab-mode",
+        title="Lab/CTF mode — practice only, public targets blocked",
+        kind="workflow",
+        audience=("all", "learner"),
+        summary=(
+            "Lab/CTF mode restricts KSEC to lab ranges: private/loopback networks, .test / "
+            ".local / .lab / .ctf hostnames and lab-labelled names. Real public targets are "
+            "denied with a clear reason, making it safe for classrooms and practice ranges "
+            "(spec 06#56)."
+        ),
+        keywords=("lab", "ctf", "mode", "practice", "training", "sandbox", "classroom", "lab mode", "ctf mode"),
+        sections=(
+            ("p", "Allowed: 127.0.0.0/8, 10/8, 172.16/12, 192.168/16, ::1, fc00::/7 plus hostnames ending .test/.local/.lab/.ctf/.lan/.internal/.example or containing lab/ctf/target/sandbox."),
+            ("cmd", "ksec mode status"),
+            ("cmd", "ksec mode set lab on"),
+            ("cmd", "ksec mode set lab off"),
+            ("cmd", "ksec mode set safe on"),
+            ("cmd", "ksec mode set read-only on"),
+            ("tip", "Modes persist in the config file's [safety] table and apply from the next invocation."),
+        ),
+    ),
+    Topic(
+        id="workflow-dag",
+        title="Workflow DAG + retries — steps that depend on steps",
+        kind="workflow",
+        audience=("all", "red"),
+        summary=(
+            "Workflow steps can declare name + depends_on, so a step only runs after its "
+            "dependencies finish, and retry/retry_delay for automatic backoff on failure. "
+            "Edits bump the version and every run snapshots exactly what executed (spec 07)."
+        ),
+        keywords=("workflow", "dag", "depends", "dependency", "parallel", "retry", "backoff", "version", "snapshot", "steps", "automation"),
+        sections=(
+            ("p", "Use --steps-json for named steps with dependencies: each step object may carry \"name\", \"depends_on\": [...], \"retry\": N and \"retry_delay\": seconds. Cycles and unknown dependencies are rejected at creation."),
+            ("cmd", "ksec workflow create --name staged --steps-json '[{\"capability\":\"dns_lookup\",\"name\":\"resolve\"},{\"capability\":\"port_scan\",\"name\":\"scan\",\"depends_on\":[\"resolve\"],\"retry\":2}]'"),
+            ("cmd", "ksec workflow validate --name staged"),
+            ("cmd", "ksec workflow run staged example.com --engagement 1 --user admin --password ..."),
+            ("cmd", "ksec workflow history --json    # version + immutable snapshot per run"),
+            ("tip", "Running a workflow never uses a half-edited definition: the version + steps are frozen into the run record at start."),
+        ),
+    ),
+    Topic(
+        id="session-switch",
+        title="Session switch/reconnect — move between workspaces",
+        kind="workflow",
+        audience=("all",),
+        summary=(
+            "ksec session switch pauses your other active sessions and activates the one "
+            "you choose; ksec session reconnect brings a paused session back (spec 07#31-32). "
+            "Think of it as moving your terminal focus between workspaces."
+        ),
+        keywords=("session", "switch", "reconnect", "workspace", "focus", "terminal", "context", "session switch"),
+        sections=(
+            ("p", "Sessions belong to their user: switching/reconnecting to another user's session is refused. The other active sessions of the same user are paused, keeping one clear focus."),
+            ("cmd", "ksec session list"),
+            ("cmd", "ksec session switch <session-id> --user admin --password ..."),
+            ("cmd", "ksec session reconnect <session-id> --user admin --password ..."),
+            ("tip", "Global flags also help here: ksec --profile soc status merges a [profiles.soc] config section on top of the base config."),
+        ),
+    ),
+    Topic(
         id="ask-how",
         title="Using ksec ask — the in-tool mentor",
         kind="workflow",
@@ -977,6 +1186,8 @@ ALIASES: dict[str, str] = {
     "red": "role-red",
     "blue": "role-blue",
     "purple": "role-purple",
+    "blackhat": "role-blackhat",
+    "black hat": "role-blackhat",
     "osint researcher": "role-purple",
     "learner": "role-learner",
 }

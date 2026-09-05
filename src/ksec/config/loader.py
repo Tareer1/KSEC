@@ -33,6 +33,9 @@ DEFAULTS: dict[str, dict[str, Any]] = {
         "require_authorization": True,
         "safe_mode": False,
         "read_only": False,
+        "lab_mode": False,
+        "rate_limit_per_minute": 0,  # 0 = unlimited; global job submission cap
+        "rate_limit_per_user": 0,    # 0 = unlimited; per-user job submission cap
     },
     "audit": {
         "enabled": True,
@@ -82,14 +85,22 @@ def find_config_file() -> Path | None:
     return None
 
 
-def load_config_dict() -> tuple[dict, Path | None]:
+def load_config_dict(
+    config_path: str | None = None, profile: str | None = None
+) -> tuple[dict, Path | None]:
     """Merge defaults with the first found user config file.
 
+    ``config_path`` forces a specific file; ``profile`` selects an optional
+    ``[profiles.<name>]`` section merged on top (spec 03: ``--profile``).
     Returns ``(merged_dict, source_path_or_None)``.
     """
     merged = _deep_merge(DEFAULTS, {})
     source = None
-    for path in config_file_candidates():
+    if config_path:
+        candidates = [Path(config_path)]
+    else:
+        candidates = config_file_candidates()
+    for path in candidates:
         if path.is_file():
             try:
                 with path.open("rb") as fh:
@@ -99,6 +110,14 @@ def load_config_dict() -> tuple[dict, Path | None]:
             merged = _deep_merge(merged, user)
             source = path
             break
+    if profile:
+        profiles = merged.get("profiles", {})
+        selected = profiles.get(profile) if isinstance(profiles, dict) else None
+        if not isinstance(selected, dict):
+            raise ConfigurationError(
+                f"Unknown config profile {profile!r} (no [profiles.{profile}] section)"
+            )
+        merged = _deep_merge(merged, selected)
     return merged, source
 
 
@@ -116,6 +135,9 @@ class KsecConfig:
     require_authorization: bool
     safe_mode: bool
     read_only: bool
+    lab_mode: bool
+    rate_limit_per_minute: int
+    rate_limit_per_user: int
     audit_enabled: bool
     audit_retention_days: int
     notification_providers: dict
@@ -123,7 +145,10 @@ class KsecConfig:
 
     @classmethod
     def load(cls, overrides: dict | None = None) -> "KsecConfig":
-        merged, source = load_config_dict()
+        overrides = overrides or {}
+        config_path = overrides.pop("_config_path", None)
+        profile = overrides.pop("_profile", None)
+        merged, source = load_config_dict(config_path=config_path, profile=profile)
         if overrides:
             merged = _deep_merge(merged, overrides)
 
@@ -155,6 +180,9 @@ class KsecConfig:
             require_authorization=bool(safety.get("require_authorization", True)),
             safe_mode=bool(safety.get("safe_mode", False)),
             read_only=bool(safety.get("read_only", False)),
+            lab_mode=bool(safety.get("lab_mode", False)),
+            rate_limit_per_minute=int(safety.get("rate_limit_per_minute", 0)),
+            rate_limit_per_user=int(safety.get("rate_limit_per_user", 0)),
             audit_enabled=bool(audit.get("enabled", True)),
             audit_retention_days=int(audit.get("retention_days", 365)),
             notification_providers=providers if isinstance(providers, dict) else {},
@@ -173,6 +201,9 @@ class KsecConfig:
             "require_authorization": self.require_authorization,
             "safe_mode": self.safe_mode,
             "read_only": self.read_only,
+            "lab_mode": self.lab_mode,
+            "rate_limit_per_minute": self.rate_limit_per_minute,
+            "rate_limit_per_user": self.rate_limit_per_user,
             "audit_enabled": self.audit_enabled,
             "audit_retention_days": self.audit_retention_days,
             "notification_providers": self.notification_providers,
@@ -207,6 +238,10 @@ default_timeout_seconds = {config.default_timeout_seconds}
 require_authorization = {"true" if config.require_authorization else "false"}
 safe_mode = {"true" if config.safe_mode else "false"}
 read_only = {"true" if config.read_only else "false"}
+lab_mode = {"true" if config.lab_mode else "false"}
+# Rate limiting (0 = unlimited): global and per-user job submissions per minute.
+rate_limit_per_minute = {config.rate_limit_per_minute}
+rate_limit_per_user = {config.rate_limit_per_user}
 
 [audit]
 enabled = {"true" if config.audit_enabled else "false"}

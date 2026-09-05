@@ -113,3 +113,10 @@ class CapabilityRegistry:
         if self.db is None:
             return []
         return self.db.query_all("SELECT * FROM tool_registry ORDER BY tool")
+
+    def remove_from_registry(self, name: str) -> bool:
+        """Drop a tool's registry row (the system binary is left untouched)."""
+        if self.db is None:
+            return False
+        cursor = self.db.execute("DELETE FROM tool_registry WHERE tool = ?", (name,))
+        return cursor.rowcount > 0

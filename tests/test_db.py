@@ -28,13 +28,18 @@ class MigrationTest(KsecTestCase):
         self.assertIn("009_schedules.sql", applied)
         self.assertIn("010_api_tokens.sql", applied)
         self.assertIn("011_window_rules.sql", applied)
-        self.assertEqual(self.runner.current_version(), 11)
+        self.assertIn("012_custody_notes_remediation.sql", applied)
+        # Latest migration number, derived from the migrations directory so the
+        # test never goes stale when a new migration is added.
+        latest = max(int(f.name.split("_")[0]) for f in MIGRATIONS_DIR.glob("[0-9][0-9][0-9]_*.sql"))
+        self.assertEqual(self.runner.current_version(), latest)
         self.assertEqual(self.runner.pending(), [])
 
     def test_apply_is_idempotent(self):
         self.runner.apply()
         self.runner.apply()
-        self.assertEqual(self.runner.current_version(), 11)
+        latest = max(int(f.name.split("_")[0]) for f in MIGRATIONS_DIR.glob("[0-9][0-9][0-9]_*.sql"))
+        self.assertEqual(self.runner.current_version(), latest)
 
     def test_schema_tables_exist(self):
         self.runner.apply()
@@ -71,6 +76,11 @@ class MigrationTest(KsecTestCase):
             "ttps",
             "campaign_ttps",
             "iocs",
+            "evidence_custody",
+            "case_notes",
+            "case_events",
+            "finding_remediations",
+            "remediation_verifications",
             "schema_migrations",
         ):
             self.assertIn(expected, tables)

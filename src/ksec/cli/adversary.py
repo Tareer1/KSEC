@@ -109,7 +109,7 @@ def cmd_adv_profile_delete(ctx: KsecContext, args) -> int:
 
 
 def cmd_adv_coverage(ctx: KsecContext, args) -> int:
-    coverage = ctx.adversary.coverage(profile_id=args.profile)
+    coverage = ctx.adversary.coverage(profile_id=args.profile_id)
     if args.json:
         emit(coverage, True, False)
     elif args.quiet:
@@ -130,7 +130,7 @@ def cmd_adv_exercise_new(ctx: KsecContext, args) -> int:
     try:
         exercise_id = ctx.adversary.create_exercise(
             args.name,
-            profile_id=args.profile,
+            profile_id=args.profile_id,
             engagement_id=args.engagement,
             operator_id=user.id,
         )

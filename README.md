@@ -76,22 +76,41 @@ Implemented so far (spec Stages 1–9 core, interfaces included):
 - [x] Atomic red tests for detection validation (`ksec atomic list|info|run`)
 - [x] Adversary kill-chain execution (ATT&CK tactic order) + per-phase coverage reports (`ksec adversary exercise chain`)
 - [x] Kali tool integrations: nmap, dig, curl + **sslscan, gobuster, nikto, wpscan, hydra, enum4linux, smbmap, dnsrecon, whatweb, theHarvester** (adapters+parsers+install mapping) — 19 integrated tools, live-verified
-- [x] **In-tool mentor** — `ksec ask` answers anything in plain language inside the tool (security concepts from zero, every tool card, module guides) and `ksec role red|blue|purple|learner` shows the exact step-by-step playbook for each team; fully offline, no AI dependency
+- [x] **In-tool mentor** — `ksec ask` answers anything in plain language inside the tool (security concepts from zero, every tool card, module guides) and `ksec role red|blue|purple|blackhat|learner` shows the exact step-by-step playbook for each team; fully offline, no AI dependency — `blackhat` is controlled authorized emulation of the real intruder mindset (spec 06 §28), never unrestricted activity
 - [x] **Recurring jobs** (cron automation): `ksec job schedule add <capability> <target> --cron '0 6 * * *'` — policy-checked at creation, fires through the same scheduler + audit trail (`ksec job schedule list|remove|run`)
 - [x] Report **executive summary**: auto severity counts + top-risk findings + recommended next step at the top of every Markdown/HTML report
 - [x] SOC triage actor audit: `soc alert action ack/resolve/close` and `case close` accept `--user`, recording who acted in the audit log
 - [x] **REST API** (`ksec api`): SHA-256-hashed revocable bearer tokens + stdlib JSON server — reads (status/jobs/assets/findings/alerts/cases/engagements/sessions/iocs/tools/audit) and writes (SOC ingest, alert/case actions, scope-checked capability runs) all behind the same policy + audit as the CLI
 - [x] **SIEM auto-ingestion** (`ksec siem`): UDP syslog-style listener + file/directory watcher — parses RFC3164 syslog, JSONL and auditd key=value records and pushes every line through the normal SOC pipeline with deterministic dedup (`ksec siem listen|watch|demo`)
 - [x] **Windowed detection rules**: `ksec soc rule add ... --within <minutes> --count <N>` fires once when N matching events occur inside the window (brute-force detection) — migration `011`
-- [x] **Interactive SOC dashboard**: alert ack/resolve/close + case close from the browser (`ksec dashboard start`), audited as actor `dashboard`
+- [x] **Emergency stop** (`ksec stop --all`): cancels every non-terminal job, blocks new submissions persistently (survives restarts), preserves evidence, audited — `stop --status` / `stop --reset`
+- [x] **Rate limiting**: `[safety] rate_limit_per_minute` (global) + `rate_limit_per_user` sliding-window caps on job submission, audited denials
+- [x] **Finding lifecycle**: `ksec finding update <id> --status`, `ksec finding remediate`, `ksec finding verify` (separate verification records), `ksec finding remediations` — spec remediation engine
+- [x] **Case notes + timeline + reopen**: `ksec case note add|list`, `ksec case timeline`, `ksec case reopen --reason` — migration `012`
+- [x] **Evidence chain of custody**: every capture/verify/action recorded (`ksec evidence custody <id>`), integrity failures tracked — migration `012`
+- [x] **Database introspection**: `ksec db version|health|repair` (integrity, foreign keys, migrations, WAL checkpoint/reindex)
+- [x] **Auditable exports**: `ksec export case|findings|evidence|assets` — JSON with provenance + chain of custody
+- [x] **GRC/Compliance** (`ksec grc`): NIST 800-53 / CIS / OWASP / ISO 27001 / SOC 2 / PCI DSS controls mapped to deterministic checks; snapshots stored as evidence — migration `012`
+- [x] **Malware analysis** (`ksec malware analyze`): static-only hash/format/strings/entropy, hashes auto-registered as IOCs, evidence stored — never executes the sample
+- [x] **Endpoint security** (`ksec endpoint`): read-only host/process/user/listening-socket inventory from /proc; passive checks + optional findings
+- [x] **Interactive SOC dashboard**: alert ack/resolve/close + case close from the browser (`ksec dashboard start`), audited as actor `dashboard`; optional bearer-token auth (`--require-auth`, spec 06 §75) — page prompts for a `ksec api` token and every request is validated
+- [x] **Time-bound authorization**: `ksec engagement create --valid-from --valid-until` — engagements outside their validity window are refused at the policy gate (spec 06 §54), migration `014`
+- [x] **Lab/CTF mode**: `ksec mode set lab on` restricts every target action to lab ranges/hostnames; `ksec mode status|set lab|safe|read-only on|off` persists to the config file (spec 06 §56)
+- [x] **Workflow DAG + retry**: custom workflow steps support `name`, `depends_on` (dependency ordering, cycle/unknown-dep validation) and `retry`/`retry_delay` (exponential backoff) — spec 07, migration `014`
+- [x] **Workflow versioning**: custom workflows carry a `version` bumped on every edit; each run snapshots the exact definition + version it executed (`ksec workflow history` shows immutable snapshots) — spec 07
+- [x] **Session switch/reconnect**: `ksec session switch <id> --user ...` pauses the user's other active sessions while activating the target; `ksec session reconnect <id>` resumes a paused session (spec 07 §31-32)
+- [x] **Tool management** (`ksec tools`): `search`, `capabilities`, `docs`, `update`, `remove`, plus `list --category/--installed/--missing/--broken` filters (spec 03)
+- [x] **Global CLI flags**: `--debug`, `--no-color`, `--profile NAME` (config `[profiles.<name>]` sections) and `--config PATH` (spec 03); root-level flags now survive subcommand parsing
 - [x] **Plugin scaffold** (`ksec plugin new`): generates a valid manifest + adapter + parser skeleton with normalized capabilities
 - [x] **DFIR forensics extras**: `dfir artifact hash` (SHA-256/SHA-1 of a collected file) + `dfir export` (chronology as CSV/JSONL)
 - [x] **100% AI-free**: zero dependencies (`dependencies = []`), fully offline — the `ksec ask` mentor is a deterministic keyword router over curated topics, no LLM/cloud of any kind
 - [x] CLI: `init status doctor version config env tools session engagement
       assess job asset finding evidence case report learn workflow dfir intel
-      plugin adversary vuln atomic soc siem run backup tui dashboard ask role api`
-- [x] 387 unit tests (stdlib unittest, no dependencies) + 201-step CLI smoke suite
+      plugin adversary vuln atomic soc siem run backup tui dashboard ask role api
+      stop db export grc malware endpoint mode`
+- [x] 445 unit tests (stdlib unittest, no dependencies) + 272-check CLI smoke suite
   (`python3 -m unittest discover -s tests` / `bash scripts/smoke.sh`)
+- [x] Migrations `001`–`014`
 - [x] **v0.3.0** — changelog in `CHANGELOG.md`; docs in [`docs/`](docs/README.md)
 
 ## Quick start (no installation required)

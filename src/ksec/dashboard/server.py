@@ -24,6 +24,27 @@ from ksec.bootstrap import KsecContext
 
 ACTOR = "dashboard"
 
+
+def _auth_snippet(require_auth: bool) -> str:
+    """JS injected into the page: token prompt + bearer header when auth is on."""
+    if not require_auth:
+        return ""
+    return """
+const TOKEN_KEY = 'ksec_dash_token';
+function getToken(){ return localStorage.getItem(TOKEN_KEY) || ''; }
+function askToken(){
+  const t = prompt('KSEC dashboard token (create one with: ksec api token create --user NAME --password ...)');
+  if (t){ localStorage.setItem(TOKEN_KEY, t); }
+}
+if(!getToken()){ askToken(); }
+function authHeaders(extra){
+  const h = Object.assign({}, extra || {});
+  if(getToken()){ h['Authorization'] = 'Bearer ' + getToken(); }
+  return h;
+}
+"""
+
+
 PAGE = """<!DOCTYPE html>
 <html><head><meta charset="utf-8"><title>KSEC Dashboard</title>
 <style>
@@ -45,11 +66,13 @@ Actions: <a href="/">overview</a> &middot; <a href="/soc">SOC alerts</a> &middot
 
 <script>
 const HOST = '';
+__AUTH_JS__
 function esc(v){ const d=document.createElement('div'); d.textContent=v==null?'':String(v); return d.innerHTML; }
 function sevClass(s){ return 'sev-'+(s||'info'); }
 async function api(path, method){
-  const opts = method ? {method, headers:{'Content-Type':'application/json'}, body:'{}'} : {};
+  const opts = method ? {method, headers:authHeaders({'Content-Type':'application/json'}), body:'{}'} : {method, headers:authHeaders({})};
   const r = await fetch(HOST + path, opts);
+  if (r.status === 401){ askToken(); location.reload(); throw new Error('unauthorized'); }
   return r.json();
 }
 function page(html){ document.getElementById('page').innerHTML = html; }
@@ -117,9 +140,12 @@ route();
 """
 
 
-def make_handler(context: KsecContext) -> Type[BaseHTTPRequestHandler]:
+def make_handler(
+    context: KsecContext, require_auth: bool = False
+) -> Type[BaseHTTPRequestHandler]:
     class DashboardHandler(BaseHTTPRequestHandler):
         server_version = "KSEC/0.2"
+        _require_auth = require_auth
 
         def _json(self, data: dict | list, status: int = 200) -> None:
             body = json.dumps(data, indent=2, default=str).encode("utf-8")
@@ -149,12 +175,33 @@ def make_handler(context: KsecContext) -> Type[BaseHTTPRequestHandler]:
             except (json.JSONDecodeError, UnicodeDecodeError):
                 return {}
 
+        def _check_auth(self) -> bool:
+            """Bearer-token auth (spec 06#75): dashboard enforces the same
+            backend authorization as the CLI/API when ``--require-auth``."""
+            if not self._require_auth:
+                return True
+            header = self.headers.get("Authorization", "")
+            if not header.startswith("Bearer "):
+                return False
+            token = header[len("Bearer "):].strip()
+            record = context.api_tokens.validate(token)
+            if record is None:
+                return False
+            self._actor = f"dashboard:{record.user_id}"
+            return True
+
+        def _page(self) -> bytes:
+            html = PAGE.replace("__AUTH_JS__", _auth_snippet(self._require_auth))
+            return html.encode("utf-8")
+
         def _dispatch(self) -> None:
             path = self.path.split("?", 1)[0]
             if path == "/":
-                return self._html(PAGE.encode("utf-8"))
+                return self._html(self._page())
             if path.startswith("/soc") or path.startswith("/cases"):
-                return self._html(PAGE.encode("utf-8"))
+                return self._html(self._page())
+            if not self._check_auth():
+                return self._json({"error": "unauthorized — provide a valid Bearer API token"}, 401)
 
             if self.command == "GET":
                 # /api/v1/alerts?limit=50&status=open
@@ -347,10 +394,17 @@ def make_handler(context: KsecContext) -> Type[BaseHTTPRequestHandler]:
 
 
 class DashboardServer:
-    def __init__(self, context: KsecContext, host: str = "127.0.0.1", port: int = 8080):
+    def __init__(
+        self,
+        context: KsecContext,
+        host: str = "127.0.0.1",
+        port: int = 8080,
+        require_auth: bool = False,
+    ):
         self.host = host
         self.port = port
-        handler = make_handler(context)
+        self.require_auth = require_auth
+        handler = make_handler(context, require_auth=require_auth)
         self.httpd = ThreadingHTTPServer((host, port), handler)
 
     def serve_forever(self) -> None:

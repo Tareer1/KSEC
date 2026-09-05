@@ -40,6 +40,12 @@ This guide covers **every implemented command**. Run
 26. [Atomic red tests](#26-atomic-red-tests)
 27. [In-tool mentor](#27-in-tool-mentor)
 28. [Tips and troubleshooting](#28-tips-and-troubleshooting)
+28.5. [Safety controls: emergency stop + rate limiting](#285-safety-controls-emergency-stop--rate-limiting)
+28.6. [GRC / compliance](#286-grc--compliance)
+28.7. [Malware analysis](#287-malware-analysis-static-never-executes)
+28.8. [Endpoint security](#288-endpoint-security-read-only-inventory)
+28.9. [Database health + exports](#289-database-health--exports)
+28.10. [Finding lifecycle + case collaboration](#2810-finding-lifecycle--case-collaboration)
 
 ---
 
@@ -909,7 +915,7 @@ ksec adversary profile show apt-29
 actually exercise:
 
 ```bash
-ksec adversary coverage --profile apt-29
+ksec adversary coverage --profile-id 1    # (--profile renamed to --profile-id for global --profile)
 ksec adversary report <exercise-id>     # post-run technique coverage
 ```
 
@@ -1042,6 +1048,184 @@ ethics), every integrated tool (nmap, dig, dnsrecon, curl, sslscan,
 nikto, gobuster, wpscan, hydra, enum4linux, smbmap, subfinder), module
 guides (vuln, atomic, adversary, SOC pipeline, DFIR, plugins) and the
 four role playbooks.
+
+## 28.5 Safety controls: emergency stop + rate limiting
+
+```bash
+# Cancel every running/queued job and block new submissions (persistent)
+python3 -m ksec stop --all
+python3 -m ksec stop --status      # is the stop active?
+python3 -m ksec stop --reset       # clear it and accept jobs again
+```
+
+The emergency stop cancels all non-terminal jobs, preserves evidence and job
+state, records an `emergency_stop` audit event, and persists across process
+restarts. While active, every submission is refused.
+
+Rate limiting caps job submissions in a sliding 60-second window
+(config `[safety]`):
+
+```toml
+[safety]
+rate_limit_per_minute = 0   # 0 = unlimited; global cap
+rate_limit_per_user = 0     # 0 = unlimited; per-user cap
+lab_mode = false            # lab/CTF mode: targets restricted to lab ranges
+safe_mode = false
+read_only = false
+```
+
+## 28.51 Time-bound authorization (spec 06 §54)
+
+Engagements can carry an authorization window. Outside it, every target
+action is refused at the policy gate — even if a scope rule matches:
+
+```bash
+# Valid for all of 2026
+python3 -m ksec engagement create --name q1-2026 \
+    --valid-from 2026-01-01 --valid-until 2026-12-31
+
+# Expired / not-yet-valid engagements are flagged and refused
+python3 -m ksec engagement list                 # shows [expired] / [not-yet-valid]
+python3 -m ksec run dns_lookup example.com --engagement 2 --user admin \
+    --password '...'      # -> refused: engagement expired on ...
+```
+
+## 28.52 Lab/CTF mode + `ksec mode`
+
+Lab/CTF mode turns KSEC into a contained practice range: every target
+action is limited to lab networks (127.0.0.0/8, 10/8, 172.16/12, 192.168/16,
+::1, fc00::/7), lab hostnames (`.test .local .lab .ctf .lan .internal`
+`.example`) and lab-labelled names. Public targets are denied with a clear
+reason.
+
+```bash
+python3 -m ksec mode status                       # current operation + safety modes
+python3 -m ksec mode set lab on                   # targets restricted to lab ranges
+python3 -m ksec mode set lab off
+python3 -m ksec mode set safe on                  # confirmation before tool install
+python3 -m ksec mode set read-only on             # no mutating actions
+```
+
+Modes persist in the config file's `[safety]` table and take effect on the
+next invocation.
+
+## 28.53 Workflow DAG, retry + versioning (spec 07)
+
+Workflow steps support dependencies (`depends_on` by step `name`), retries
+with exponential backoff, and versioned immutable runs:
+
+```bash
+# A DAG: port_scan only runs after dns_lookup completes; retry twice on failure
+python3 -m ksec workflow create --name staged \
+  --steps-json '[
+    {"capability": "dns_lookup", "name": "resolve"},
+    {"capability": "port_scan", "name": "scan", "depends_on": ["resolve"],
+     "retry": 2, "retry_delay": 5}
+  ]'
+
+python3 -m ksec workflow validate --name staged     # unknown deps / cycles rejected
+python3 -m ksec workflow run staged example.com --engagement 1 --user admin --password '...'
+
+# Every edit bumps the version; every run snapshots the exact executed definition
+python3 -m ksec workflow list                      # shows v1, v2, ...
+python3 -m ksec workflow history --json            # per-run version + immutable snapshot
+```
+
+## 28.54 Session switch/reconnect + tool management (spec 03/07)
+
+```bash
+# Switch the active context to another of the user's sessions (others pause)
+python3 -m ksec session switch <session-id> --user admin --password '...'
+# Reconnect to a paused session
+python3 -m ksec session reconnect <session-id> --user admin --password '...'
+
+# Tool management
+python3 -m ksec tools search dns          # by name / capability / category
+python3 -m ksec tools capabilities        # every capability, ready/missing
+python3 -m ksec tools docs nmap           # full documentation
+python3 -m ksec tools update              # re-discover + refresh registry
+python3 -m ksec tools remove nmap         # drop a registry row (binary untouched)
+python3 -m ksec tools list --installed --missing --broken --category recon
+```
+
+## 28.55 Dashboard auth + global flags
+
+```bash
+# Require a Bearer API token on every dashboard request (spec 06 §75)
+python3 -m ksec dashboard start --require-auth --port 8080
+python3 -m ksec api token create --user admin --password '...'   # token to paste
+
+# Global flags (spec 03)
+python3 -m ksec --debug status               # debug logging
+python3 -m ksec --no-color status            # no ANSI color
+python3 -m ksec --config ./team.toml status  # explicit config file
+python3 -m ksec --profile soc status         # merge [profiles.soc] on top
+```
+
+Config profiles live in the same file under `[profiles.<name>]` tables and
+deep-merge over the base configuration.
+
+## 28.6 GRC / compliance
+
+`ksec grc` maps KSEC's deterministic checks to framework controls
+(NIST 800-53, CIS, OWASP, ISO 27001, SOC 2, PCI DSS) — it reports whether
+the *technical check* passed, never legal certification:
+
+```bash
+python3 -m ksec grc frameworks
+python3 -m ksec grc controls --framework "ISO 27001"
+python3 -m ksec grc status
+python3 -m ksec grc check --target example.com   # snapshot stored as evidence
+```
+
+## 28.7 Malware analysis (static, never executes)
+
+```bash
+python3 -m ksec malware analyze /evidence/sample.bin
+python3 -m ksec malware analyze /evidence/sample.bin --finding
+```
+
+Pipeline: hash (SHA-256/SHA-1/MD5) → format detection (PE/ELF/Mach-O/ZIP/
+PDF/script) → strings → entropy → hashes auto-registered as IOCs → analysis
+stored as evidence. The sample is never executed.
+
+## 28.8 Endpoint security (read-only inventory)
+
+```bash
+python3 -m ksec endpoint inventory
+python3 -m ksec endpoint process --limit 50
+python3 -m ksec endpoint user
+python3 -m ksec endpoint port
+python3 -m ksec endpoint check --create-findings
+```
+
+## 28.9 Database health + exports
+
+```bash
+python3 -m ksec db version     # schema version + pending migrations
+python3 -m ksec db health      # integrity / foreign keys / migrations
+python3 -m ksec db repair --yes # WAL checkpoint + reindex (backup first)
+
+python3 -m ksec export case 1 --out case-1.json
+python3 -m ksec export findings --engagement 1
+python3 -m ksec export evidence            # includes chain of custody
+python3 -m ksec export assets
+```
+
+## 28.10 Finding lifecycle + case collaboration
+
+```bash
+python3 -m ksec finding update 1 --status confirmed
+python3 -m ksec finding remediate 1 --owner ops --priority high --description "upgrade TLS"
+python3 -m ksec finding verify --remediation 1 --method retest --result verified
+python3 -m ksec finding remediations 1
+
+python3 -m ksec case note add --case 1 --content "analyst notes..." --author alice
+python3 -m ksec case note list --case 1
+python3 -m ksec case timeline 1
+python3 -m ksec case reopen 1 --reason "new evidence"
+python3 -m ksec evidence custody 1
+```
 
 ## 28. Tips and troubleshooting
 

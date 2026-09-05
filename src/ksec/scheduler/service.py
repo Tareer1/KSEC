@@ -28,6 +28,7 @@ from ksec.scheduler.schedules import ScheduleStore, cron_matches
 
 _STDOUT_LIMIT = 100_000
 _STDERR_LIMIT = 10_000
+_RATE_WINDOW_SECONDS = 60.0
 
 
 class Scheduler:
@@ -56,6 +57,16 @@ class Scheduler:
         self._stop = threading.Event()
         self._wake = threading.Event()
         self._worker: threading.Thread | None = None
+        # Emergency stop (spec 06#32, 07#79): when set, no new jobs may be
+        # submitted and all non-terminal jobs are cancelled. The flag is
+        # persisted in system_state so it survives process restarts.
+        self._emergency_stop = threading.Event()
+        self._restore_stop()
+        # Sliding-window rate limiting (spec 06#34): timestamps of recent
+        # submissions, global and per-user.
+        self._submit_times: list[float] = []
+        self._user_submit_times: dict[str, list[float]] = {}
+        self._rate_blocked: dict[str, float] = {}  # user -> blocked-until (epoch)
 
     # -- lifecycle ---------------------------------------------------------
 
@@ -71,6 +82,105 @@ class Scheduler:
         if self._worker is not None:
             self._worker.join(timeout=join_timeout)
             self._worker = None
+
+    # -- emergency stop ---------------------------------------------------
+
+    def _persist_stop(self, active: bool) -> None:
+        """Persist the emergency-stop flag so it survives process restarts."""
+        try:
+            row = self.db.query_one("SELECT name FROM sqlite_master WHERE type='table' AND name='system_state'")
+            if row is None:
+                return
+            if active:
+                self.db.execute(
+                    "INSERT OR REPLACE INTO system_state (key, value) VALUES ('emergency_stop', '1')"
+                )
+            else:
+                self.db.execute("DELETE FROM system_state WHERE key = 'emergency_stop'")
+        except Exception:  # noqa: BLE001 - persistence must never break a stop
+            pass
+
+    def _restore_stop(self) -> None:
+        """Load a persisted emergency-stop flag at startup (spec 06#32)."""
+        try:
+            row = self.db.query_one(
+                "SELECT value FROM system_state WHERE key = 'emergency_stop'"
+            )
+            if row is not None and row["value"] == "1":
+                self._emergency_stop.set()
+        except Exception:  # noqa: BLE001
+            pass
+
+    def emergency_stop(self, actor: str | None = None) -> dict:
+        """Global stop (spec: EMERGENCY STOP / ksec stop --all).
+
+        Cancels every non-terminal job across all sessions, blocks new
+        submissions (persistently, across process restarts) and records the
+        event in the audit log. Evidence and job state are preserved (jobs
+        move to CANCELLED, never deleted).
+        """
+        cancelled: list[str] = []
+        with self._lock:
+            self._emergency_stop.set()
+            for job in self.jobs.list():
+                if not job.is_terminal:
+                    try:
+                        self.cancel(job.id)
+                        cancelled.append(job.id)
+                    except KSECError:
+                        continue
+        self._persist_stop(True)
+        if self.audit:
+            self.audit.record(
+                event_type="emergency_stop",
+                actor=actor or "system",
+                action="emergency_stop",
+                target="all",
+                payload={"cancelled_jobs": cancelled},
+            )
+        return {"stopped": True, "cancelled_jobs": cancelled}
+
+    def emergency_stop_clear(self, actor: str | None = None) -> None:
+        """Clear the emergency-stop flag so new jobs may be submitted again."""
+        self._emergency_stop.clear()
+        self._persist_stop(False)
+        with self._lock:
+            self._submit_times.clear()
+            self._user_submit_times.clear()
+            self._rate_blocked.clear()
+        if self.audit:
+            self.audit.record(
+                event_type="emergency_stop_clear",
+                actor=actor or "system",
+                action="emergency_stop_clear",
+            )
+
+    def is_emergency_stopped(self) -> bool:
+        return self._emergency_stop.is_set()
+
+    # -- rate limiting ----------------------------------------------------
+
+    def _rate_allowed(self, user_id: int | None) -> tuple[bool, str]:
+        """Sliding-window rate limit on submissions (global + per-user)."""
+        now = time.monotonic()
+        window_start = now - _RATE_WINDOW_SECONDS
+        with self._lock:
+            self._submit_times = [t for t in self._submit_times if t > window_start]
+            key = f"u{user_id}" if user_id is not None else "anon"
+            times = self._user_submit_times.setdefault(key, [])
+            self._user_submit_times[key] = [t for t in times if t > window_start]
+            blocked_until = self._rate_blocked.get(key, 0.0)
+            if blocked_until > now:
+                return False, "rate limited (per-user)"
+            limit = self.config.rate_limit_per_minute
+            if limit and len(self._submit_times) >= limit:
+                self._rate_blocked[key] = now + _RATE_WINDOW_SECONDS
+                return False, f"global rate limit reached ({limit}/min)"
+            user_limit = self.config.rate_limit_per_user
+            if user_limit and len(self._user_submit_times[key]) >= user_limit:
+                self._rate_blocked[key] = now + _RATE_WINDOW_SECONDS
+                return False, f"per-user rate limit reached ({user_limit}/min)"
+            return True, ""
 
     def recover(self) -> list[str]:
         """Mark jobs left RUNNING by a previous process as FAILED."""
@@ -90,6 +200,26 @@ class Scheduler:
         workflow: str = "",
         priority: int = 0,
     ) -> Job:
+        if self._emergency_stop.is_set():
+            raise KSECError(
+                "Emergency stop is active — no new jobs may be submitted "
+                "(use `ksec stop --reset` after resolving the situation)"
+            )
+        allowed, reason = self._rate_allowed(user_id)
+        if not allowed:
+            if self.audit:
+                self.audit.record(
+                    event_type="policy.rate_limited",
+                    action=f"job.submit:{capability}",
+                    target=target or None,
+                    outcome="denied",
+                    payload={"reason": reason, "user_id": user_id},
+                )
+            raise KSECError(f"Submission denied: {reason}")
+        with self._lock:
+            self._submit_times.append(time.monotonic())
+            key = f"u{user_id}" if user_id is not None else "anon"
+            self._user_submit_times.setdefault(key, []).append(time.monotonic())
         job = self.jobs.create(
             capability=capability,
             target=target,

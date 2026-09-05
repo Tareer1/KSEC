@@ -6,13 +6,24 @@ from ksec.cli.output import emit
 
 
 def cmd_engagement_create(ctx: KsecContext, args) -> int:
-    engagement = ctx.authz.create_engagement(args.name, description=args.description or "")
+    try:
+        engagement = ctx.authz.create_engagement(
+            args.name,
+            description=args.description or "",
+            valid_from=getattr(args, "valid_from", None),
+            valid_until=getattr(args, "valid_until", None),
+        )
+    except Exception as exc:
+        emit(str(exc), args.json, args.quiet)
+        return 1
     emit(
         {
             "created": True,
             "id": engagement.id,
             "name": engagement.name,
             "status": engagement.status,
+            "valid_from": engagement.valid_from,
+            "valid_until": engagement.valid_until,
         },
         args.json,
         args.quiet,
@@ -29,6 +40,9 @@ def cmd_engagement_list(ctx: KsecContext, args) -> int:
             "description": e.description,
             "status": e.status,
             "created_at": e.created_at,
+            "valid_from": e.valid_from,
+            "valid_until": e.valid_until,
+            "window": e.window_status,
         }
         for e in engagements
     ]
@@ -41,7 +55,9 @@ def cmd_engagement_list(ctx: KsecContext, args) -> int:
         if not data:
             print("no engagements")
         for e in data:
-            print(f"{e['id']:>3}  {e['name']:<24} {e['status']:<8} {e['created_at']}")
+            window = e["window"]
+            flag = "" if window == "active" or window == "no-window" else f" [{window}]"
+            print(f"{e['id']:>3}  {e['name']:<24} {e['status']:<8} {e['created_at']}{flag}")
     return 0
 
 

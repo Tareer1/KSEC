@@ -63,6 +63,44 @@ class KnowledgeServiceTest(KsecTestCase):
         for role_id in ("role-red", "role-blue", "role-purple", "role-learner"):
             self.assertIsNotNone(self.kb.get(role_id), role_id)
 
+    def test_blackhat_role_playbook_exists(self):
+        topic = self.kb.get("role-blackhat")
+        self.assertIsNotNone(topic)
+        self.assertEqual(topic.kind, "role")
+        self.assertIn("red", topic.audience)
+
+    def test_blackhat_aliases_resolve(self):
+        self.assertEqual(self.kb.get("blackhat").id, "role-blackhat")
+        self.assertEqual(self.kb.get("black hat").id, "role-blackhat")
+
+    def test_blackhat_question_routing(self):
+        answer = self.kb.answer("black hat kaise karta hai")
+        self.assertTrue(answer.matched)
+        self.assertEqual(answer.topic.id, "role-blackhat")
+
+    def test_blackhat_is_controlled_emulation_not_criminal_guidance(self):
+        """Spec 06#28: black-hat framing must stay authorized emulation."""
+        topic = self.kb.get("role-blackhat")
+        text = " ".join(
+            [str(topic.title), str(topic.summary)]
+            + [str(part) for part in topic.sections]
+        ).lower()
+        self.assertIn("controlled adversary simulation", text)
+        # The playbook opens with an authorization step, never with attack steps.
+        first_text = str(topic.sections[0][1]).lower()
+        self.assertIn("authorize", first_text)
+        self.assertNotIn("unauthorized", text)
+
+    def test_blackhat_playbook_commands_stay_scope_gated(self):
+        topic = self.kb.get("role-blackhat")
+        commands = [
+            part for kind, part in topic.sections if kind == "cmd"
+        ]
+        # Every attack step is bound to an engagement scope or the workspace.
+        self.assertTrue(any("engagement create" in c for c in commands))
+        self.assertTrue(any("scope add" in c for c in commands))
+        self.assertTrue(any("--engagement" in c for c in commands))
+
 
 class AskCliTest(KsecTestCase):
     def setUp(self):
@@ -119,6 +157,35 @@ class AskCliTest(KsecTestCase):
             code = cmd_role(self.ctx, SimpleNamespace(name="blue", json=False, quiet=False, mode="professional"))
         self.assertEqual(code, 0)
         self.assertIn("BLUE TEAM playbook", buffer.getvalue())
+
+    def test_cmd_role_blackhat_text(self):
+        buffer = io.StringIO()
+        with redirect_stdout(buffer):
+            code = cmd_role(self.ctx, SimpleNamespace(name="blackhat", json=False, quiet=False, mode="professional"))
+        self.assertEqual(code, 0)
+        self.assertIn("BLACK HAT emulation playbook", buffer.getvalue())
+
+    def test_cmd_role_blackhat_json(self):
+        buffer = io.StringIO()
+        with redirect_stdout(buffer):
+            code = cmd_role(self.ctx, SimpleNamespace(name="blackhat", json=True, quiet=False, mode="professional"))
+        self.assertEqual(code, 0)
+        data = json.loads(buffer.getvalue())
+        self.assertEqual(data["topic"]["id"], "role-blackhat")
+
+    def test_cmd_role_blackhat_quiet(self):
+        buffer = io.StringIO()
+        with redirect_stdout(buffer):
+            code = cmd_role(self.ctx, SimpleNamespace(name="blackhat", json=False, quiet=True, mode="professional"))
+        self.assertEqual(code, 0)
+        self.assertEqual(buffer.getvalue().strip(), "role-blackhat")
+
+    def test_cmd_role_blackhat_alias(self):
+        buffer = io.StringIO()
+        with redirect_stdout(buffer):
+            code = cmd_role(self.ctx, SimpleNamespace(name="black hat", json=False, quiet=False, mode="professional"))
+        self.assertEqual(code, 0)
+        self.assertIn("BLACK HAT emulation playbook", buffer.getvalue())
 
     def test_cmd_role_unknown(self):
         buffer = io.StringIO()

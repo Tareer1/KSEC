@@ -16,11 +16,15 @@ def cmd_tui(ctx: KsecContext, args) -> int:
 def cmd_dashboard_start(ctx: KsecContext, args) -> int:
     from ksec.dashboard.server import DashboardServer
 
-    server = DashboardServer(ctx, host=args.host, port=args.port)
+    require_auth = getattr(args, "require_auth", False)
+    server = DashboardServer(
+        ctx, host=args.host, port=args.port, require_auth=require_auth
+    )
     emit(
         {
             "started": True,
             "url": f"http://{args.host}:{server.bound_port()}/",
+            "require_auth": require_auth,
         },
         args.json,
         args.quiet,

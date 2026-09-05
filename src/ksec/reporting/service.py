@@ -17,7 +17,7 @@ from ksec.evidence.service import EvidenceService
 from ksec.findings.service import FindingService
 from ksec.identity.users import now_utc
 
-VALID_FORMATS = ("markdown", "html")
+VALID_FORMATS = ("markdown", "html", "pdf")
 
 
 @dataclass(frozen=True)
@@ -52,6 +52,49 @@ class ReportService:
         self.evidence = evidence
         self.cases = cases
 
+    def render(
+        self,
+        engagement_id: int | None,
+        title: str = "",
+        fmt: str = "markdown",
+    ) -> dict:
+        """Render report content without persisting (preview)."""
+        if fmt not in VALID_FORMATS:
+            raise ValueError(f"Invalid report format: {fmt}")
+        engagement = self.authz.get_engagement(engagement_id) if engagement_id else None
+        report_title = title or (f"Assessment Report — {engagement.name}" if engagement else "KSEC Report")
+
+        findings = self.findings.list(engagement_id=engagement_id)
+        assets = self.assets.list(engagement_id=engagement_id)
+        evidence = self.evidence.list(engagement_id=engagement_id)
+        cases = self.cases.list()
+        rules = self.authz.list_authorizations(engagement_id) if engagement_id else []
+
+        if fmt == "markdown":
+            content = self._render_markdown(
+                report_title, engagement, rules, assets, findings, evidence, cases
+            )
+        elif fmt == "html":
+            content = self._render_html(
+                report_title, engagement, rules, assets, findings, evidence, cases
+            )
+        else:
+            content = self._render_markdown(
+                report_title, engagement, rules, assets, findings, evidence, cases
+            )
+        return {
+            "title": report_title,
+            "engagement_id": engagement_id,
+            "format": fmt,
+            "content": content,
+            "counts": {
+                "assets": len(assets),
+                "findings": len(findings),
+                "evidence": len(evidence),
+                "scope_rules": len(rules),
+            },
+        }
+
     def generate(
         self,
         engagement_id: int | None,
@@ -70,15 +113,15 @@ class ReportService:
         cases = self.cases.list()
         rules = self.authz.list_authorizations(engagement_id) if engagement_id else []
 
-        content = (
-            self._render_markdown(
+        if fmt == "markdown" or fmt == "pdf":
+            # PDF reports are generated from the structured markdown content.
+            content = self._render_markdown(
                 report_title, engagement, rules, assets, findings, evidence, cases
             )
-            if fmt == "markdown"
-            else self._render_html(
+        else:
+            content = self._render_html(
                 report_title, engagement, rules, assets, findings, evidence, cases
             )
-        )
         with self.db.transaction() as conn:
             cursor = conn.execute(
                 "INSERT INTO reports (engagement_id, title, format, content, created_at,"
@@ -86,6 +129,13 @@ class ReportService:
                 (engagement_id, report_title, fmt, content, now_utc(), created_by),
             )
         return self.get(cursor.lastrowid)
+
+    @staticmethod
+    def to_pdf(report: Report) -> bytes:
+        """Export a report's stored markdown content as a printable PDF."""
+        from ksec.reporting.pdf import render_pdf
+
+        return render_pdf(report.content, report.title)
 
     def get(self, report_id: int) -> Report | None:
         row = self.db.query_one("SELECT * FROM reports WHERE id = ?", (report_id,))

@@ -321,7 +321,7 @@ expect_fail "ask unmatched" "${BIN[@]}" ask "zzqqxxyy nonsense"
 expect_fail "role unknown" "${BIN[@]}" role hacker
 
 say "22. help parsers (every group)"
-for g in init status doctor version config env admin audit tools session engagement assess job asset finding evidence case report learn workflow dfir intel plugin adversary vuln atomic update notify soc run backup tui dashboard ask role stop db export grc malware endpoint; do
+for g in init status doctor version config env admin audit tools session engagement assess job asset finding evidence case report learn workflow dfir intel plugin adversary vuln atomic update notify soc run backup tui dashboard ask role stop db export grc malware endpoint module purple change history graph; do
   run_ok "help: $g" "${BIN[@]}" "$g" --help
 done
 
@@ -532,6 +532,60 @@ run_ok "suggest blackhat" "${BIN[@]}" suggest blackhat
 run_grep "suggest blue suggests a detection rule" 'Add a detection rule' "${BIN[@]}" suggest blue
 run_grep "role red trailer has NEXT" 'NEXT — ab kya karna hai' "${BIN[@]}" role red
 expect_fail "suggest unknown role" "${BIN[@]}" suggest hacker
+
+say "37. domain modules + purple + change detection"
+run_ok "module list"       "${BIN[@]}" module list
+run_ok "module info api"   "${BIN[@]}" module info api
+run_ok "module check cloud" "${BIN[@]}" module check cloud
+run_ok "module check wireless (clean)" "${BIN[@]}" module check wireless
+run_grep "module info has tools" '"tools"' "${BIN[@]}" module info kubernetes --json
+expect_fail "module check unknown" "${BIN[@]}" module check does-not-exist
+run_ok "purple exercise new" "${BIN[@]}" purple exercise new --name smoke-purple --description "smoke" --engagement 1
+run_ok "purple exercise list" "${BIN[@]}" purple exercise list
+run_ok "purple exercise start" "${BIN[@]}" purple exercise start 1
+run_ok "purple exercise complete" "${BIN[@]}" purple exercise complete 1
+run_grep "purple exercise show has coverage" '"detection_coverage"' "${BIN[@]}" purple exercise show 1 --json
+expect_fail "purple start unknown" "${BIN[@]}" purple exercise start 4242
+run_ok "change baseline create" "${BIN[@]}" change baseline create --name smoke-base --scope assets
+run_ok "change baseline list" "${BIN[@]}" change baseline list
+run_ok "change scan (clean)" "${BIN[@]}" change scan 1
+run_grep "change scan reports clean" '"status": "clean"' "${BIN[@]}" change scan 1 --json
+run_ok "change scans list" "${BIN[@]}" change scans --baseline 1
+expect_fail "change baseline create bad scope" "${BIN[@]}" change baseline create --name x --scope wat
+expect_fail "change scan unknown baseline" "${BIN[@]}" change scan 4242
+
+say "38. job logs/retry/trace/health + report preview/pdf + history/graph + practice + triggers"
+run_ok "job health" "${BIN[@]}" job health
+run_ok "job logs (any id)" "${BIN[@]}" job logs "$( "${BIN[@]}" job list --quiet 2>/dev/null | head -1 )"
+run_ok "job trace (any id)" "${BIN[@]}" job trace "$( "${BIN[@]}" job list --quiet 2>/dev/null | head -1 )"
+run_ok "job retry (terminal id)" "${BIN[@]}" job retry "$( "${BIN[@]}" job list --quiet 2>/dev/null | head -1 )"
+expect_fail "job logs unknown" "${BIN[@]}" job logs 424242
+expect_fail "job retry unknown" "${BIN[@]}" job retry 424242
+run_ok "report preview" "${BIN[@]}" report preview --engagement 1
+run_grep "report preview has counts" '"counts"' "${BIN[@]}" report preview --engagement 1 --json
+run_ok "report create pdf" "${BIN[@]}" report create --engagement 1 --title smoke-pdf --format pdf --out "$KSEC_HOME/smoke.pdf"
+if head -c 5 "$KSEC_HOME/smoke.pdf" 2>/dev/null | grep -q '%PDF'; then
+  PASS=$((PASS + 1)); echo "PASS  pdf header is %PDF"
+else
+  FAIL=$((FAIL + 1)); FAILED+=("pdf header"); echo "FAIL  pdf header is %PDF"
+fi
+run_ok "report export pdf" "${BIN[@]}" report export 1 --out "$KSEC_HOME/export.pdf"
+expect_fail "report export unknown" "${BIN[@]}" report export 4242
+run_ok "history" "${BIN[@]}" history --limit 5
+run_ok "graph" "${BIN[@]}" graph
+run_ok "graph --json" "${BIN[@]}" graph --json
+run_ok "learn practice list" "${BIN[@]}" learn practice list
+run_ok "learn practice start" "${BIN[@]}" learn practice start --id practice.scope --user "$ADMIN" --password "$APW"
+run_ok "learn practice pass" "${BIN[@]}" learn practice pass --id practice.scope --user "$ADMIN" --password "$APW"
+run_grep "learn practice shows passed" '\[x\] practice.scope' "${BIN[@]}" learn practice list --user "$ADMIN" --password "$APW"
+expect_fail "learn practice unknown drill" "${BIN[@]}" learn practice pass --id nope --user "$ADMIN" --password "$APW"
+run_ok "workflow trigger add" "${BIN[@]}" workflow trigger add --name smoke-on-fail --event-type job.failed --workflow recon --event-glob "*.local"
+run_ok "workflow trigger list" "${BIN[@]}" workflow trigger list
+run_grep "trigger matches payload" '"matched": 1' "${BIN[@]}" workflow trigger fire --event-type job.failed --payload '{"target": "x.local"}' --user "$ADMIN" --password "$APW"
+run_ok "workflow trigger disable" "${BIN[@]}" workflow trigger disable 1
+run_ok "workflow trigger enable" "${BIN[@]}" workflow trigger enable 1
+run_ok "workflow trigger remove" "${BIN[@]}" workflow trigger remove 1
+run_grep "workflow trigger fire unmatched event is a no-op" '"matched": 0' "${BIN[@]}" workflow trigger fire --event-type no.such.event --user "$ADMIN" --password "$APW"
 
 # ---------------------------------------------------------------------------
 echo

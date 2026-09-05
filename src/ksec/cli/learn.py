@@ -94,3 +94,73 @@ def cmd_learn_progress(ctx: KsecContext, args) -> int:
     data["levels"] = {str(k): v for k, v in LEARNING_LEVELS.items()}
     emit(data, args.json, args.quiet)
     return 0
+
+
+def cmd_learn_practice_list(ctx: KsecContext, args) -> int:
+    """List hands-on practice drills (with the user's status when --user)."""
+    user = None
+    if getattr(args, "user", None):
+        try:
+            user = _authenticate(ctx, args)
+        except KSECError as exc:
+            emit(exc.message, args.json, args.quiet)
+            return 1
+    data = ctx.learning.practice_drills(user.id if user else None)
+    if args.json:
+        emit(data, True, False)
+    elif args.quiet:
+        for drill in data:
+            mark = "[x]" if drill["status"] == "passed" else "[ ]"
+            print(f"{mark} {drill['drill_id']}")
+    else:
+        for drill in data:
+            mark = {"passed": "[x]", "pending": "[ ]", "in_progress": "[~]"}.get(
+                drill["status"], "[ ]"
+            )
+            print(f"{mark} {drill['drill_id']} — {drill['title']} (phase {drill['phase']})")
+            print(f"    {drill['summary']}")
+            print(f"    verify: {drill['verify']}")
+    return 0
+
+
+def cmd_learn_practice_start(ctx: KsecContext, args) -> int:
+    try:
+        user = _authenticate(ctx, args)
+    except KSECError as exc:
+        emit(exc.message, args.json, args.quiet)
+        return 1
+    try:
+        ctx.learning.practice_start(user.id, args.id)
+    except ValueError as exc:
+        emit(str(exc), args.json, args.quiet)
+        return 1
+    emit(
+        {"started": True, "drill_id": args.id, "user": user.username},
+        args.json,
+        args.quiet,
+    )
+    return 0
+
+
+def cmd_learn_practice_pass(ctx: KsecContext, args) -> int:
+    try:
+        user = _authenticate(ctx, args)
+    except KSECError as exc:
+        emit(exc.message, args.json, args.quiet)
+        return 1
+    try:
+        ctx.learning.practice_pass(user.id, args.id)
+    except ValueError as exc:
+        emit(str(exc), args.json, args.quiet)
+        return 1
+    ctx.notifications.record(
+        event_type="learning.practice_passed",
+        title=f"Practice drill passed: {args.id}",
+        body=f"user {user.username}",
+    )
+    emit(
+        {"passed": True, "drill_id": args.id, "user": user.username},
+        args.json,
+        args.quiet,
+    )
+    return 0

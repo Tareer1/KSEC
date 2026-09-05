@@ -114,3 +114,63 @@ class LearningService:
             status=row["status"],
             completed_at=row["completed_at"],
         )
+
+    # -- practice drills ---------------------------------------------------
+
+    def practice_drills(self, user_id: int | None = None) -> list[dict]:
+        """List practice drills with the user's per-drill status."""
+        from ksec.learning.practice import drills as all_drills
+
+        rows: dict[str, sqlite3.Row] = {}
+        if user_id is not None:
+            for row in self.db.query_all(
+                "SELECT drill_id, status, attempts, passed_at FROM practice_progress"
+                " WHERE user_id = ?",
+                (user_id,),
+            ):
+                rows[row["drill_id"]] = row
+        result = []
+        for drill in all_drills():
+            row = rows.get(drill.drill_id)
+            result.append(
+                {
+                    "drill_id": drill.drill_id,
+                    "title": drill.title,
+                    "phase": drill.phase,
+                    "summary": drill.summary,
+                    "steps": list(drill.steps),
+                    "verify": drill.verify,
+                    "status": row["status"] if row else "pending",
+                    "attempts": row["attempts"] if row else 0,
+                    "passed_at": row["passed_at"] if row else None,
+                }
+            )
+        return result
+
+    def practice_start(self, user_id: int, drill_id: str) -> None:
+        """Record that the learner attempted a drill (increments attempts)."""
+        from ksec.learning.practice import find_drill
+
+        if find_drill(drill_id) is None:
+            raise ValueError(f"Unknown drill: {drill_id}")
+        self.db.execute(
+            "INSERT INTO practice_progress (user_id, drill_id, status, attempts)"
+            " VALUES (?, ?, 'pending', 1)"
+            " ON CONFLICT (user_id, drill_id) DO UPDATE SET"
+            " attempts = attempts + 1",
+            (user_id, drill_id),
+        )
+
+    def practice_pass(self, user_id: int, drill_id: str) -> None:
+        """Mark a drill as passed for the user."""
+        from ksec.learning.practice import find_drill
+
+        if find_drill(drill_id) is None:
+            raise ValueError(f"Unknown drill: {drill_id}")
+        self.db.execute(
+            "INSERT INTO practice_progress (user_id, drill_id, status, attempts, passed_at)"
+            " VALUES (?, ?, 'passed', 1, ?)"
+            " ON CONFLICT (user_id, drill_id) DO UPDATE SET status = 'passed',"
+            " passed_at = ?",
+            (user_id, drill_id, now_utc(), now_utc()),
+        )

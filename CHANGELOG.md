@@ -3,6 +3,56 @@
 All notable changes are tracked here. Format follows
 [Keep a Changelog](https://keepachangelog.com/) and semantic versioning.
 
+## [0.4.0] - 2026-09-05 — final gap-closing round
+
+### Added — all-in-one completeness (spec 03/07/08)
+
+- **5 domain modules** (`ksec module`): API Security, Wireless, Cloud,
+  Container and Kubernetes (spec 08 #23-27). Each declares its Kali
+  capabilities + tooling, reports what is installed (`module list|info`)
+  and runs deterministic offline posture checks — config presence, secret
+  hygiene in cwd, world-readable config dirs, metadata guard — with every
+  run audited (`module check`). Migration `015`.
+- **Purple team exercises** (`ksec purple exercise`, spec 08 #28):
+  coordinated red+blue lifecycle `new | list | start | complete | show |
+  delete`. Completing an exercise deterministically tallies findings of the
+  linked engagement (red output), open SOC alerts (blue detections) and
+  fired detection rules, then reports **detection coverage %** with a
+  good/partial/gap verdict. Migration `015`.
+- **Change detection** (`ksec change`, spec 08 #59): baselines snapshot
+  assets / findings / jobs / config counters (`change baseline create`);
+  `change scan <id>` re-reads state and diffs it, returning `clean` or a
+  deterministic `drift` list (added/removed/changed paths) persisted to
+  `change_scans` and surfaced as a notification. Migration `015`.
+- **Job operations**: `ksec job logs <id>` shows captured stdout/stderr;
+  `job retry <id>` resubmits a terminal job as a brand-new QUEUED job
+  (`workflow=retry:<orig>`, audited — the record is never re-run);
+  `job trace <id>` follows the job's session, schedule, workflow and audit
+  lineage; `job health` reports live scheduler state (worker, queue depth,
+  running jobs, emergency stop, rate limits).
+- **Report preview + PDF export**: `ksec report preview --engagement N`
+  renders a report (counts included) without storing it; `report create
+  --format pdf` and `report export <id>` write a printable multi-page PDF
+  produced by a new pure-stdlib PDF writer (`ksec/reporting/pdf.py`) —
+  still zero dependencies.
+- **Activity views**: `ksec history` renders a chronological timeline over
+  workflow runs, audit events and jobs; `ksec graph` renders the
+  relationship graph engagements → assets → findings → cases/evidence as
+  nodes + edges (JSON or human readable).
+- **Learn practice drills** (`ksec learn practice`): six hands-on,
+  authorized, offline drills (scope, recon, finding+risk, detection rule,
+  DFIR artifact, report). `practice list | start | pass` records attempts
+  and passes per user. Migration `015`.
+- **Event-driven workflow triggers** (`ksec workflow trigger`, spec 07):
+  bind an `event_type` + target glob to a workflow; `trigger add|list|
+  remove|enable|disable` manage them and `trigger fire --event-type ...
+  --payload ...` runs every matched workflow through the normal policy
+  gate (never bypasses authorization). Migration `015`.
+- CLI surface extended: `module purple change history graph` + `job
+  logs|retry|trace|health`, `report preview|export`, `learn practice`,
+  `workflow trigger`.
+- 477 unit tests + 329-check CLI smoke suite; migrations `001`–`015`.
+
 ## [Unreleased] — spec completion round (safety, time-bound auth, lab mode, workflow DAG/versioning, CLI)
 
 ### Added — time-bound authorization + lab mode (spec 06)

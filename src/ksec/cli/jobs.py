@@ -247,3 +247,120 @@ def cmd_job_cancel(ctx: KsecContext, args) -> int:
         return 1
     emit(_job_dict(job), args.json, args.quiet)
     return 0
+
+
+def cmd_job_logs(ctx: KsecContext, args) -> int:
+    """Show a completed job's stored stdout/stderr (spec: job logs)."""
+    job = ctx.jobs.get(args.id)
+    if job is None:
+        emit(f"unknown job: {args.id}", args.json, args.quiet)
+        return 1
+    result = job.result or {}
+    if args.json:
+        emit(
+            {
+                "id": job.id,
+                "state": job.state,
+                "exit_code": job.exit_code,
+                "error": job.error,
+                "stdout": (result.get("stdout") or "")[:20000],
+                "stderr": (result.get("stderr") or "")[:5000],
+                "duration_seconds": result.get("duration_seconds"),
+            },
+            True,
+            False,
+        )
+        return 0
+    print(f"job {job.id} [{job.state}] exit={job.exit_code}")
+    if job.error:
+        print(f"error: {job.error}")
+    stdout = (result.get("stdout") or "").strip()
+    stderr = (result.get("stderr") or "").strip()
+    if stdout:
+        print("--- stdout ---")
+        print(stdout[:20000])
+    if stderr:
+        print("--- stderr ---")
+        print(stderr[:5000])
+    if not stdout and not stderr:
+        print("(no output captured)")
+    return 0
+
+
+def cmd_job_retry(ctx: KsecContext, args) -> int:
+    """Resubmit a terminal job as a fresh job (never re-runs the record)."""
+    try:
+        new_job = ctx.scheduler.retry(args.id)
+    except KSECError as exc:
+        emit(exc.message, args.json, args.quiet)
+        return 1
+    emit(
+        {
+            "retried": True,
+            "original": args.id,
+            "job_id": new_job.id,
+            "capability": new_job.capability,
+            "target": new_job.target,
+            "state": new_job.state,
+        },
+        args.json,
+        args.quiet,
+    )
+    return 0
+
+
+def cmd_job_trace(ctx: KsecContext, args) -> int:
+    """Trace a job's lineage: spec, session, schedule and related audit events."""
+    job = ctx.jobs.get(args.id)
+    if job is None:
+        emit(f"unknown job: {args.id}", args.json, args.quiet)
+        return 1
+    trace: dict = {"job": _job_dict(job), "options": job.options}
+    if job.session_id:
+        session = ctx.sessions.get(job.session_id)
+        trace["session"] = (
+            {
+                "id": session.id,
+                "user": session.username,
+                "workspace": session.workspace,
+                "role": session.role,
+                "state": session.state,
+            }
+            if session
+            else None
+        )
+    if job.workflow.startswith("schedule:") or job.workflow.startswith("retry:") or job.workflow:
+        trace["workflow"] = job.workflow
+    if job.workflow.startswith("schedule:") and not job.workflow.endswith(":manual"):
+        schedule_id = job.workflow.split(":")[1]
+        try:
+            schedule = ctx.scheduler.schedules.get(int(schedule_id))
+            if schedule:
+                trace["schedule"] = schedule.to_dict()
+        except (ValueError, TypeError):
+            pass
+    related = ctx.audit.list(limit=200)
+    events = [
+        {
+            "event_type": row["event_type"],
+            "actor": row["actor"],
+            "action": row["action"],
+            "created_at": row["created_at"],
+        }
+        for row in related
+        if row["action"] and (
+            f"job:{job.id}" in str(row["action"])
+            or f'"job_id": "{job.id}"' in (row["payload"] or "")
+            or f'"job_id": "{job.id[:12]}' in (row["payload"] or "")
+        )
+    ]
+    trace["audit_events"] = events[:25]
+    emit(trace, args.json, args.quiet)
+    return 0
+
+
+def cmd_job_health(ctx: KsecContext, args) -> int:
+    """Show live scheduler health (worker, queue, threads, rate limits)."""
+    data = ctx.scheduler.health()
+    emit(data, args.json, args.quiet)
+    return 0

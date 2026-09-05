@@ -50,6 +50,10 @@ from ksec.threat_intel.service import ThreatIntelService
 from ksec.updates.service import UpdateService
 from ksec.workflows.engine import WorkflowEngine
 from ksec.workflows.store import WorkflowStore
+from ksec.workflows.triggers import TriggerStore
+from ksec.modules.registry import ModuleRegistry
+from ksec.purple.service import PurpleService
+from ksec.change.service import ChangeService
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 MIGRATIONS_DIR = PROJECT_ROOT / "migrations"
@@ -101,6 +105,10 @@ class KsecContext:
     grc: GrcService
     malware: MalwareService
     endpoint: EndpointService
+    modules: ModuleRegistry
+    purple: PurpleService
+    change: ChangeService
+    triggers: TriggerStore
 
     def close(self) -> None:
         self.scheduler.stop()
@@ -147,6 +155,7 @@ def bootstrap(overrides: dict | None = None, run_migrations: bool = True) -> Kse
     notifications = NotificationService(db, providers=_provider_cfg)
     backups = BackupService(db, config, audit)
     workflow_store = WorkflowStore(db, capabilities=capabilities, adapters=adapters)
+    triggers = TriggerStore(db)
     dfir = DfirService(db, audit)
     intel = ThreatIntelService(db)
     # Auto-register IOCs from every completed job's evidence.
@@ -177,6 +186,9 @@ def bootstrap(overrides: dict | None = None, run_migrations: bool = True) -> Kse
     grc = GrcService(db, audit, config=config, evidence=evidence, vuln=vuln, backups=backups)
     malware = MalwareService(db, evidence=evidence, intel=intel, findings=findings, audit=audit)
     endpoint = EndpointService(db, findings=findings, audit=audit)
+    modules = ModuleRegistry(db, audit=audit)
+    purple = PurpleService(db, audit=audit, notifications=notifications)
+    change = ChangeService(db, audit=audit, notifications=notifications)
 
     return KsecContext(
         config=config,
@@ -220,4 +232,8 @@ def bootstrap(overrides: dict | None = None, run_migrations: bool = True) -> Kse
     grc=grc,
     malware=malware,
     endpoint=endpoint,
+    modules=modules,
+    purple=purple,
+    change=change,
+    triggers=triggers,
     )

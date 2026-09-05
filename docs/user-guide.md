@@ -1227,6 +1227,103 @@ python3 -m ksec case reopen 1 --reason "new evidence"
 python3 -m ksec evidence custody 1
 ```
 
+## 28.11 Domain modules: api / wireless / cloud / container / kubernetes (spec 08 #23-27)
+
+```bash
+python3 -m ksec module list              # all 5 modules + audience
+python3 -m ksec module info api          # capabilities + installed tools
+python3 -m ksec module check cloud       # deterministic offline posture checks
+python3 -m ksec module check api --user admin
+```
+
+Each module declares the Kali tools behind it and runs read-only, offline
+posture checks (config presence, secret hygiene, config-directory
+permissions, metadata guard) — nothing is executed against a target.
+
+## 28.12 Purple team exercises (spec 08 #28)
+
+```bash
+python3 -m ksec purple exercise new --name "red-vs-blue" --engagement 1
+python3 -m ksec purple exercise start 1
+python3 -m ksec purple exercise complete 1   # tallies findings/alerts/detections
+python3 -m ksec purple exercise show 1       # detection coverage % + verdict
+python3 -m ksec purple exercise list
+python3 -m ksec purple exercise delete 1
+```
+
+Completing an exercise deterministically counts the linked engagement's
+findings (red output), open SOC alerts (blue detections) and fired
+detection rules, then reports detection coverage.
+
+## 28.13 Change detection: baselines + drift (spec 08 #59)
+
+```bash
+python3 -m ksec change baseline create --name prod-assets --scope assets
+python3 -m ksec change baseline list
+python3 -m ksec change scan 1              # clean or drift + diff items
+python3 -m ksec change scans --baseline 1  # scan history
+```
+
+Scopes: `assets`, `findings`, `jobs`, `config`. A scan re-reads the state
+and flags added/removed/changed records; drift raises a notification.
+
+## 28.14 Job operations: logs / retry / trace / health
+
+```bash
+python3 -m ksec job logs <job-id>          # captured stdout/stderr
+python3 -m ksec job retry <job-id>         # fresh resubmit (new job id)
+python3 -m ksec job trace <job-id>         # session/schedule/audit lineage
+python3 -m ksec job health                 # live scheduler state
+```
+
+Retry only accepts terminal jobs and always creates a brand-new job — the
+original record is never re-executed.
+
+## 28.15 Report preview + PDF export
+
+```bash
+python3 -m ksec report preview --engagement 1        # render, don't store
+python3 -m ksec report create --engagement 1 --format pdf --out report.pdf
+python3 -m ksec report export 1 --out report.pdf      # any stored report -> PDF
+```
+
+The PDF writer is pure stdlib — KSEC stays zero-dependency.
+
+## 28.16 Activity views: history + graph
+
+```bash
+python3 -m ksec history --limit 30   # timeline: runs, audit events, jobs
+python3 -m ksec graph                # engagements -> assets -> findings -> cases
+python3 -m ksec graph --json
+```
+
+Both are read-only views over the shared database.
+
+## 28.17 Learn practice drills
+
+```bash
+python3 -m ksec learn practice list
+python3 -m ksec learn practice start --id practice.recon --user learner --password ...
+python3 -m ksec learn practice pass  --id practice.recon --user learner --password ...
+```
+
+Six hands-on, authorized, offline drills with per-user attempts and pass
+status (scope, recon, finding+risk, detection rule, DFIR artifact, report).
+
+## 28.18 Event-driven workflow triggers (spec 07)
+
+```bash
+python3 -m ksec workflow trigger add --name on-fail --event-type job.failed \
+    --workflow recon --event-glob "*.local"
+python3 -m ksec workflow trigger list
+python3 -m ksec workflow trigger fire --event-type job.failed \
+    --payload '{"target": "x.local"}' --user admin --password ...
+python3 -m ksec workflow trigger disable/enable/remove <id>
+```
+
+Triggers bind an event type + target glob to a workflow; firing runs every
+match through the normal policy gate — authorization is never bypassed.
+
 ## 28. Tips and troubleshooting
 
 **"Target not authorized for ..." / REQUIRE_AUTHORIZATION**

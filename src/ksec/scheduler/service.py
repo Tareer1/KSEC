@@ -158,6 +158,59 @@ class Scheduler:
     def is_emergency_stopped(self) -> bool:
         return self._emergency_stop.is_set()
 
+    def health(self) -> dict:
+        """Live scheduler state: worker, queue, threads and rate window."""
+        with self._lock:
+            threads = dict(self._threads)
+            procs = dict(self._procs)
+        row = self.db.query_one("SELECT COUNT(*) AS c FROM jobs WHERE state = 'QUEUED'")
+        queued = int(row["c"]) if row else 0
+        running_row = self.db.query_one("SELECT COUNT(*) AS c FROM jobs WHERE state = 'RUNNING'")
+        running = int(running_row["c"]) if running_row else 0
+        return {
+            "worker_alive": bool(self._worker is not None and self._worker.is_alive()),
+            "emergency_stop": self._emergency_stop.is_set(),
+            "queued_jobs": queued,
+            "running_jobs": running,
+            "active_threads": len(threads),
+            "active_processes": len(procs),
+            "max_concurrent": self.config.max_concurrent_jobs,
+            "rate_limit_per_minute": self.config.rate_limit_per_minute,
+            "rate_limit_per_user": self.config.rate_limit_per_user,
+        }
+
+    def retry(self, job_id: str) -> Job:
+        """Resubmit a terminal job as a fresh QUEUED job with the same spec.
+
+        Only FAILED, CANCELLED and COMPLETED jobs can be retried; a retried
+        run is a brand-new job (never re-executes the original record).
+        """
+        job = self.jobs.get(job_id)
+        if job is None:
+            raise KSECError(f"Unknown job: {job_id}")
+        if not job.is_terminal:
+            raise KSECError(f"Cannot retry job in state {job.state}")
+        new_job = self.submit(
+            capability=job.capability,
+            target=job.target,
+            options=job.options,
+            session_id=job.session_id,
+            user_id=job.user_id,
+            workspace=job.workspace,
+            workflow=f"retry:{job_id}",
+            priority=job.priority,
+        )
+        if self.audit:
+            self.audit.record(
+                event_type="job.retry",
+                actor=None,
+                session_id=job.session_id,
+                action=f"job.retry:{job.capability}",
+                target=job.target or None,
+                payload={"original_job": job_id, "new_job": new_job.id},
+            )
+        return new_job
+
     # -- rate limiting ----------------------------------------------------
 
     def _rate_allowed(self, user_id: int | None) -> tuple[bool, str]:

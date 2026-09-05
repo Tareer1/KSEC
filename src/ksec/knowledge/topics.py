@@ -1155,6 +1155,164 @@ TOPICS: tuple[Topic, ...] = (
         ),
     ),
     Topic(
+        id="domain-modules",
+        title="Domain modules: api / wireless / cloud / container / kubernetes",
+        kind="module",
+        audience=("all",),
+        summary=(
+            "ksec module manages five domain modules — API, wireless, cloud, container and "
+            "kubernetes. Each declares the Kali tools behind it, reports what is installed "
+            "and runs deterministic offline posture checks (config presence, secret hygiene, "
+            "config permissions, metadata guard)."
+        ),
+        keywords=("module", "api", "wireless", "cloud", "container", "kubernetes", "k8s", "posture", "domain"),
+        sections=(
+            ("p", "Modules never scan a remote target by themselves: the checks are read-only and local. Pair a module with an authorized engagement before running any live tool against a host."),
+            ("cmd", "ksec module list"),
+            ("cmd", "ksec module info api"),
+            ("cmd", "ksec module check cloud"),
+            ("tip", "A module check is deterministic and offline — it never needs a target or an internet connection."),
+        ),
+    ),
+    Topic(
+        id="purple-team",
+        title="Purple team exercises — red and blue together",
+        kind="workflow",
+        audience=("red", "blue", "purple"),
+        summary=(
+            "A purple exercise coordinates the red side (findings produced by emulation) with "
+            "the blue side (alerts raised by detection). Completing an exercise tallies both "
+            "and reports detection coverage."
+        ),
+        keywords=("purple", "exercise", "detection", "coverage", "red team", "blue team", "coordinated", "kill chain"),
+        sections=(
+            ("p", "Completion is deterministic: findings of the linked engagement are the red output, open SOC alerts are blue detections, and alerts with a detection rule count as fired detections. Coverage = fired / red."),
+            ("cmd", "ksec purple exercise new --name red-vs-blue --engagement 1"),
+            ("cmd", "ksec purple exercise start 1"),
+            ("cmd", "ksec purple exercise complete 1"),
+            ("cmd", "ksec purple exercise show 1"),
+            ("cmd", "ksec purple exercise list"),
+            ("tip", "Run adversary exercises on the red side and SOC rules on the blue side before completing a purple exercise for meaningful coverage."),
+        ),
+    ),
+    Topic(
+        id="change-detection",
+        title="Change detection — baselines and drift",
+        kind="module",
+        audience=("all",),
+        summary=(
+            "ksec change snapshots state (assets, findings, jobs or config counters) into a "
+            "baseline, then scans re-read the current state and diff it — clean, or a "
+            "deterministic drift list with added/removed/changed records."
+        ),
+        keywords=("change", "baseline", "drift", "diff", "detection", "snapshot", "monitor", "change detection"),
+        sections=(
+            ("p", "Take a baseline when state is known-good, then scan periodically (or from a schedule). Any difference raises a change.drift notification."),
+            ("cmd", "ksec change baseline create --name prod-assets --scope assets"),
+            ("cmd", "ksec change baseline list"),
+            ("cmd", "ksec change scan 1"),
+            ("cmd", "ksec change scans --baseline 1"),
+            ("tip", "Scopes: assets, findings, jobs, config. A target of '*' covers everything; an engagement id scopes the snapshot."),
+        ),
+    ),
+    Topic(
+        id="job-ops",
+        title="Job operations — logs, retry, trace, health",
+        kind="workflow",
+        audience=("all",),
+        summary=(
+            "Beyond list/status/pause/resume/cancel, ksec job gives you logs (captured "
+            "stdout/stderr), retry (fresh resubmit of a terminal job), trace (session, "
+            "schedule and audit lineage) and health (live scheduler state)."
+        ),
+        keywords=("job", "retry", "logs", "trace", "health", "scheduler", "resubmit", "output"),
+        sections=(
+            ("p", "Retry only accepts terminal jobs and always creates a brand-new job id — the original record is never re-executed, keeping the audit trail intact."),
+            ("cmd", "ksec job list"),
+            ("cmd", "ksec job logs <job-id>"),
+            ("cmd", "ksec job retry <job-id>"),
+            ("cmd", "ksec job trace <job-id>"),
+            ("cmd", "ksec job health"),
+            ("tip", "ksec job health shows the scheduler's queue depth, running jobs and emergency-stop state in one view."),
+        ),
+    ),
+    Topic(
+        id="report-export",
+        title="Report preview and PDF export",
+        kind="workflow",
+        audience=("all",),
+        summary=(
+            "Preview a report without storing it, or export any stored report as a printable "
+            "PDF — produced by a pure-stdlib writer, so KSEC stays zero-dependency."
+        ),
+        keywords=("report", "preview", "pdf", "export", "print", "render"),
+        sections=(
+            ("p", "report preview renders the same content report create would store, but keeps the database unchanged — useful for checking counts before committing."),
+            ("cmd", "ksec report preview --engagement 1"),
+            ("cmd", "ksec report create --engagement 1 --format pdf --out report.pdf"),
+            ("cmd", "ksec report export 1 --out report.pdf"),
+            ("tip", "PDF export is fully offline — no external PDF library, no cloud."),
+        ),
+    ),
+    Topic(
+        id="activity-views",
+        title="History and graph — what happened, and how things connect",
+        kind="workflow",
+        audience=("all",),
+        summary=(
+            "ksec history is a chronological activity timeline (runs, audit events, jobs); "
+            "ksec graph shows the relationship graph engagements to assets to findings to "
+            "cases and evidence."
+        ),
+        keywords=("history", "graph", "timeline", "relationship", "activity", "view", "connections"),
+        sections=(
+            ("p", "Both views are read-only over the shared database — nothing executes."),
+            ("cmd", "ksec history --limit 30"),
+            ("cmd", "ksec graph"),
+            ("cmd", "ksec graph --json"),
+            ("tip", "Use ksec graph after an assessment to see which assets produced which findings and cases."),
+        ),
+    ),
+    Topic(
+        id="learn-practice",
+        title="Learn practice — hands-on drills",
+        kind="learning",
+        audience=("learner", "all"),
+        summary=(
+            "Practice drills are short, hands-on, authorized exercises you run inside KSEC "
+            "and then mark passed: create scope, run recon, document a finding, write a "
+            "detection rule, collect a forensic artifact, produce a report."
+        ),
+        keywords=("practice", "drill", "exercise", "hands-on", "lab", "try", "learn practice"),
+        sections=(
+            ("p", "Practice progress is stored per user: attempts increment on start, and pass records the drill as passed."),
+            ("cmd", "ksec learn practice list"),
+            ("cmd", "ksec learn practice start --id practice.recon --user learner --password ..."),
+            ("cmd", "ksec learn practice pass --id practice.recon --user learner --password ..."),
+            ("tip", "Drills are authorized and offline by design — no unauthorized target is ever needed."),
+        ),
+    ),
+    Topic(
+        id="workflow-triggers",
+        title="Workflow triggers — event-driven automation",
+        kind="workflow",
+        audience=("all",),
+        summary=(
+            "Beyond cron schedules, workflow triggers bind an event type + target glob to a "
+            "workflow. Firing an event runs every matched workflow through the normal policy "
+            "gate — authorization is never bypassed."
+        ),
+        keywords=("trigger", "event", "webhook", "automation", "on-fail", "on-complete", "reactive"),
+        sections=(
+            ("p", "A trigger matches when the event type equals the trigger's event_type and the payload's target matches the event glob (e.g. '*.local'). Disabled triggers never match."),
+            ("cmd", "ksec workflow trigger add --name on-fail --event-type job.failed --workflow recon --event-glob '*.local'"),
+            ("cmd", "ksec workflow trigger list"),
+            ("cmd", "ksec workflow trigger fire --event-type job.failed --payload '{\"target\": \"x.local\"}' --user admin --password ..."),
+            ("cmd", "ksec workflow trigger disable/enable/remove <id>"),
+            ("tip", "Triggers are definitions: firing still policy-checks every step against the live scope before anything runs."),
+        ),
+    ),
+    Topic(
         id="ask-how",
         title="Using ksec ask — the in-tool mentor",
         kind="workflow",
@@ -1190,6 +1348,20 @@ ALIASES: dict[str, str] = {
     "black hat": "role-blackhat",
     "osint researcher": "role-purple",
     "learner": "role-learner",
+    "modules": "domain-modules",
+    "k8s": "domain-modules",
+    "kubernetes": "domain-modules",
+    "change detection": "change-detection",
+    "purple team": "purple-team",
+    "job retry": "job-ops",
+    "retry": "job-ops",
+    "pdf": "report-export",
+    "report preview": "report-export",
+    "history": "activity-views",
+    "graph": "activity-views",
+    "practice": "learn-practice",
+    "trigger": "workflow-triggers",
+    "webhook": "workflow-triggers",
 }
 
 

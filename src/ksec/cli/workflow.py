@@ -233,7 +233,6 @@ def cmd_workflow_history(ctx: KsecContext, args) -> int:
     ]
     if args.json:
         emit(data, True, False)
-        return 0
     elif args.quiet:
         for d in data:
             print(d["run_id"])
@@ -246,17 +245,133 @@ def cmd_workflow_history(ctx: KsecContext, args) -> int:
                 f" {d['status']:<10} v{d['version']} steps={d['steps']}"
             )
     return 0
+
+
+# -- event triggers (spec 07: beyond cron schedules) ------------------------
+
+def cmd_workflow_trigger_add(ctx: KsecContext, args) -> int:
+    try:
+        trigger = ctx.triggers.create(
+            name=args.name,
+            event_type=args.event_type,
+            workflow=args.workflow,
+            event_glob=getattr(args, "event_glob", None) or "*",
+            target_field=getattr(args, "target_field", None) or "target",
+            workspace=getattr(args, "workspace", None) or "RED_TEAM",
+            created_by=getattr(args, "user", None) or "",
+        )
+    except ValueError as exc:
+        emit(str(exc), args.json, args.quiet)
+        return 1
+    emit(trigger.to_dict(), args.json, args.quiet)
+    return 0
+
+
+def cmd_workflow_trigger_list(ctx: KsecContext, args) -> int:
+    triggers = ctx.triggers.list()
+    data = [t.to_dict() for t in triggers]
     if args.json:
         emit(data, True, False)
     elif args.quiet:
-        for d in data:
-            print(d["run_id"])
+        for t in triggers:
+            print(t.id)
     else:
         if not data:
-            print("no workflow runs")
-        for d in data:
+            print("no triggers")
+        for t in data:
+            flag = "on " if t["enabled"] else "off"
             print(
-                f"{d['run_id'][:12]:<12} {d['workflow']:<16} {d['target']:<20}"
-                f" {d['status']:<10} steps={d['steps']}"
+                f"#{t['id']:<3} [{flag}] {t['event_type']:<14} -> {t['workflow']:<16}"
+                f" on {t['target_field']} ~ {t['event_glob']}"
             )
+    return 0
+
+
+def cmd_workflow_trigger_remove(ctx: KsecContext, args) -> int:
+    if not ctx.triggers.remove(args.id):
+        emit(f"unknown trigger: {args.id}", args.json, args.quiet)
+        return 1
+    emit({"removed": True, "id": args.id}, args.json, args.quiet)
+    return 0
+
+
+def cmd_workflow_trigger_enable(ctx: KsecContext, args) -> int:
+    trigger = ctx.triggers.set_enabled(args.id, True)
+    if trigger is None:
+        emit(f"unknown trigger: {args.id}", args.json, args.quiet)
+        return 1
+    emit({"id": trigger.id, "enabled": True}, args.json, args.quiet)
+    return 0
+
+
+def cmd_workflow_trigger_disable(ctx: KsecContext, args) -> int:
+    trigger = ctx.triggers.set_enabled(args.id, False)
+    if trigger is None:
+        emit(f"unknown trigger: {args.id}", args.json, args.quiet)
+        return 1
+    emit({"id": trigger.id, "enabled": False}, args.json, args.quiet)
+    return 0
+
+
+def cmd_workflow_trigger_fire(ctx: KsecContext, args) -> int:
+    """Fire an event: run every enabled trigger whose pattern matches.
+
+    Each matched trigger's workflow is resolved and executed against the
+    event's target after normal authorization checks (never bypassed).
+    """
+    try:
+        user = UserRepository(ctx.db).authenticate(args.user, args.password)
+    except KSECError as exc:
+        emit(exc.message, args.json, args.quiet)
+        return 1
+    payload: dict = {}
+    if getattr(args, "payload", None):
+        try:
+            parsed = json.loads(args.payload)
+        except json.JSONDecodeError as exc:
+            emit(f"invalid --payload JSON: {exc}", args.json, args.quiet)
+            return 1
+        if not isinstance(parsed, dict):
+            emit("--payload must be a JSON object", args.json, args.quiet)
+            return 1
+        payload = parsed
+    if getattr(args, "target", None):
+        payload.setdefault("target", args.target)
+    matched = ctx.triggers.matches(args.event_type, payload)
+    if not matched:
+        emit({"fired": False, "event_type": args.event_type, "matched": 0},
+             args.json, args.quiet)
+        return 0
+    fired: list[dict] = []
+    target = str(payload.get("target") or "")
+    for trigger in matched:
+        definition = ctx.workflow_store.resolve(trigger.workflow)
+        if definition is None:
+            fired.append({"trigger": trigger.id, "status": "skipped",
+                          "reason": f"unknown workflow {trigger.workflow}"})
+            continue
+        session = ctx.sessions.open(user, trigger.workspace, role_name=getattr(args, "role", None))
+        outcomes = ctx.workflows.plan(
+            definition,
+            user=user,
+            session=session,
+            target=target,
+            engagement_id=getattr(args, "engagement", None),
+        )
+        blocked = [o for o in outcomes if o.policy_decision != "ALLOW"]
+        if blocked:
+            fired.append({"trigger": trigger.id, "status": "blocked",
+                          "reason": blocked[0].policy_reason})
+            continue
+        run = ctx.workflows.run(
+            definition,
+            user=user,
+            session=session,
+            target=target,
+            engagement_id=getattr(args, "engagement", None),
+        )
+        ctx.triggers.mark_fired(trigger.id)
+        fired.append({"trigger": trigger.id, "status": run.status, "run_id": run.run_id})
+    emit({"fired": True, "event_type": args.event_type, "matched": len(matched),
+          "runs": fired}, args.json, args.quiet)
     return 0

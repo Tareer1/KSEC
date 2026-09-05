@@ -821,3 +821,246 @@ class RoleSuggestionsTest(KsecTestCase):
         self.assertEqual(canonical_role("osint"), "purple")
         self.assertEqual(canonical_role("RESEARCHER"), "purple")
         self.assertIsNone(canonical_role("nope"))
+
+
+class ModuleCommandsTest(KsecTestCase):
+    """Domain modules: registry, tool readiness, deterministic checks."""
+
+    def setUp(self):
+        super().setUp()
+        self.ctx = self.make_context()
+
+    def tearDown(self):
+        self.ctx.close()
+        super().tearDown()
+
+    def test_modules_listed(self):
+        ids = [m["id"] for m in self.ctx.modules.list_modules()]
+        for expected in ("api", "wireless", "cloud", "container", "kubernetes"):
+            self.assertIn(expected, ids)
+
+    def test_module_info_tools_ready(self):
+        info = self.ctx.modules.info("api")
+        self.assertIsNotNone(info)
+        self.assertTrue(any(t["name"] == "curl" for t in info["tools"]))
+
+    def test_module_check_deterministic_shape(self):
+        payload = self.ctx.modules.check("cloud", actor="test")
+        self.assertEqual(payload["module"], "cloud")
+        ids = [c["check_id"] for c in payload["checks"]]
+        self.assertIn("no_secret_in_cwd", ids)
+        self.assertIn("metadata_guard", ids)
+
+    def test_module_check_unknown(self):
+        with self.assertRaises(ValueError):
+            self.ctx.modules.check("nope")
+
+
+class PurpleExerciseTest(KsecTestCase):
+    def setUp(self):
+        super().setUp()
+        self.ctx = self.make_context()
+
+    def tearDown(self):
+        self.ctx.close()
+        super().tearDown()
+
+    def test_full_lifecycle(self):
+        exercise = self.ctx.purple.create(name="coord", description="red+blue")
+        self.assertEqual(exercise.status, "planned")
+        started = self.ctx.purple.start(exercise.id)
+        self.assertEqual(started.status, "running")
+        completed = self.ctx.purple.complete(exercise.id)
+        self.assertEqual(completed.status, "completed")
+        self.assertEqual(completed.red_findings, 0)
+
+    def test_tallies_findings_and_alerts(self):
+        eng = self.ctx.authz.create_engagement("purple-eng")
+        self.ctx.findings.create(
+            title="issue",
+            engagement_id=eng.id,
+            severity="high",
+        )
+        exercise = self.ctx.purple.create(name="tally", engagement_id=eng.id)
+        completed = self.ctx.purple.complete(exercise.id)
+        self.assertEqual(completed.red_findings, 1)
+
+    def test_summary_after_complete(self):
+        exercise = self.ctx.purple.create(name="sum")
+        self.ctx.purple.complete(exercise.id)
+        summary = self.ctx.purple.summary(exercise.id)
+        self.assertIn("detection_coverage", summary)
+
+    def test_unknown_raises(self):
+        with self.assertRaises(ValueError):
+            self.ctx.purple.complete(999)
+
+
+class ChangeDetectionTest(KsecTestCase):
+    def setUp(self):
+        super().setUp()
+        self.ctx = self.make_context()
+
+    def tearDown(self):
+        self.ctx.close()
+        super().tearDown()
+
+    def test_baseline_clean_scan(self):
+        eng = self.ctx.authz.create_engagement("change-eng")
+        baseline = self.ctx.change.create_baseline(name="b", scope="assets", target=str(eng.id))
+        self.assertEqual(baseline.scope, "assets")
+        scan = self.ctx.change.scan(baseline.id)
+        self.assertEqual(scan.status, "clean")
+        self.assertEqual(scan.drift, [])
+
+    def test_drift_detected_when_asset_appears(self):
+        baseline = self.ctx.change.create_baseline(name="b", scope="assets")
+        self.ctx.assets.register("new-host.internal", asset_type="host")
+        scan = self.ctx.change.scan(baseline.id)
+        self.assertEqual(scan.status, "drift")
+        self.assertTrue(any(d["change"] == "added" for d in scan.drift))
+
+    def test_invalid_scope_rejected(self):
+        with self.assertRaises(ValueError):
+            self.ctx.change.create_baseline(name="bad", scope="wat")
+
+    def test_findings_scope_snapshot(self):
+        eng = self.ctx.authz.create_engagement("f")
+        self.ctx.findings.create(title="x", engagement_id=eng.id, severity="low")
+        baseline = self.ctx.change.create_baseline(name="fb", scope="findings")
+        self.assertIn("findings", baseline.snapshot)
+        scan = self.ctx.change.scan(baseline.id)
+        self.assertEqual(scan.status, "clean")
+
+
+class JobOpsTest(KsecTestCase):
+    def setUp(self):
+        super().setUp()
+        self.ctx = self.make_context()
+
+    def tearDown(self):
+        self.ctx.close()
+        super().tearDown()
+
+    def test_scheduler_health_shape(self):
+        health = self.ctx.scheduler.health()
+        self.assertIn("worker_alive", health)
+        self.assertIn("queued_jobs", health)
+        self.assertIn("emergency_stop", health)
+
+    def test_retry_terminal_job(self):
+        job = self.ctx.scheduler.submit(capability="test_scan", target="10.0.0.5")
+        self.ctx.scheduler.cancel(job.id)
+        retried = self.ctx.scheduler.retry(job.id)
+        self.assertNotEqual(retried.id, job.id)
+        self.assertEqual(retried.state, "QUEUED")
+
+    def test_retry_running_job_rejected(self):
+        job = self.ctx.scheduler.submit(capability="test_scan", target="10.0.0.5")
+        with self.assertRaises(KSECError):
+            self.ctx.scheduler.retry(job.id)
+
+
+class ReportPreviewExportTest(KsecTestCase):
+    def setUp(self):
+        super().setUp()
+        self.ctx = self.make_context()
+
+    def tearDown(self):
+        self.ctx.close()
+        super().tearDown()
+
+    def test_render_without_persist(self):
+        eng = self.ctx.authz.create_engagement("preview-eng")
+        rendered = self.ctx.reports.render(eng.id, fmt="markdown")
+        self.assertIn("content", rendered)
+        self.assertIn("counts", rendered)
+        self.assertEqual(len(self.ctx.reports.list()), 0)  # nothing stored
+
+    def test_pdf_report_generated(self):
+        eng = self.ctx.authz.create_engagement("pdf-eng")
+        report = self.ctx.reports.generate(eng.id, title="PDF", fmt="pdf")
+        self.assertEqual(report.format, "pdf")
+        pdf_bytes = self.ctx.reports.to_pdf(report)
+        self.assertTrue(pdf_bytes.startswith(b"%PDF"))
+        self.assertIn(b"%%EOF", pdf_bytes)
+
+    def test_invalid_format_rejected(self):
+        with self.assertRaises(ValueError):
+            self.ctx.reports.generate(None, fmt="docx")
+
+
+class PracticeDrillsTest(KsecTestCase):
+    def setUp(self):
+        super().setUp()
+        self.ctx = self.make_context()
+        from ksec.identity.users import UserRepository
+
+        repo = UserRepository(self.ctx.db)
+        self.user = repo.create("learner", "pw")
+        self.ctx.rbac.assign_role(self.user.id, "learner")
+
+    def tearDown(self):
+        self.ctx.close()
+        super().tearDown()
+
+    def test_drills_listed(self):
+        drills = self.ctx.learning.practice_drills(self.user.id)
+        self.assertTrue(len(drills) >= 5)
+        ids = [d["drill_id"] for d in drills]
+        self.assertIn("practice.scope", ids)
+
+    def test_pass_marks_drill(self):
+        self.ctx.learning.practice_pass(self.user.id, "practice.scope")
+        drills = self.ctx.learning.practice_drills(self.user.id)
+        drill = next(d for d in drills if d["drill_id"] == "practice.scope")
+        self.assertEqual(drill["status"], "passed")
+        self.assertIsNotNone(drill["passed_at"])
+
+    def test_start_increments_attempts(self):
+        self.ctx.learning.practice_start(self.user.id, "practice.recon")
+        self.ctx.learning.practice_start(self.user.id, "practice.recon")
+        drills = self.ctx.learning.practice_drills(self.user.id)
+        drill = next(d for d in drills if d["drill_id"] == "practice.recon")
+        self.assertEqual(drill["attempts"], 2)
+
+    def test_unknown_drill_rejected(self):
+        with self.assertRaises(ValueError):
+            self.ctx.learning.practice_pass(self.user.id, "nope")
+
+
+class WorkflowTriggerTest(KsecTestCase):
+    def setUp(self):
+        super().setUp()
+        self.ctx = self.make_context()
+
+    def tearDown(self):
+        self.ctx.close()
+        super().tearDown()
+
+    def test_trigger_crud(self):
+        trigger = self.ctx.triggers.create(
+            name="on-fail", event_type="job.failed", workflow="recon",
+            event_glob="*.local", created_by="test",
+        )
+        self.assertTrue(trigger.enabled)
+        self.assertEqual(len(self.ctx.triggers.list()), 1)
+        self.assertTrue(self.ctx.triggers.remove(trigger.id))
+
+    def test_matches_glob_and_target_field(self):
+        trigger = self.ctx.triggers.create(
+            name="crit", event_type="soc.alert.critical", workflow="assess",
+            event_glob="10.0.0.*",
+        )
+        hits = self.ctx.triggers.matches("soc.alert.critical", {"target": "10.0.0.9"})
+        self.assertEqual(len(hits), 1)
+        hits = self.ctx.triggers.matches("soc.alert.critical", {"target": "other"})
+        self.assertEqual(len(hits), 0)
+
+    def test_disabled_trigger_not_matched(self):
+        trigger = self.ctx.triggers.create(
+            name="off", event_type="job.completed", workflow="recon"
+        )
+        self.ctx.triggers.set_enabled(trigger.id, False)
+        hits = self.ctx.triggers.matches("job.completed", {"target": "*"})
+        self.assertEqual(hits, [])

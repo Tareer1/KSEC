@@ -104,35 +104,125 @@ Implemented so far (spec Stages 1–9 core, interfaces included):
 - [x] **Plugin scaffold** (`ksec plugin new`): generates a valid manifest + adapter + parser skeleton with normalized capabilities
 - [x] **DFIR forensics extras**: `dfir artifact hash` (SHA-256/SHA-1 of a collected file) + `dfir export` (chronology as CSV/JSONL)
 - [x] **100% AI-free**: zero dependencies (`dependencies = []`), fully offline — the `ksec ask` mentor is a deterministic keyword router over curated topics, no LLM/cloud of any kind
+- [x] **5 domain modules** (`ksec module`): API Security, Wireless, Cloud, Container and Kubernetes — each declares its Kali tools, reports which are installed and runs deterministic offline posture checks (spec 08 #23-27), migration `015`
+- [x] **Purple team exercises** (`ksec purple exercise`): coordinated red+blue lifecycle — new/start/complete tallies findings (red), open alerts (blue) and fired detections, then reports detection coverage (spec 08 #28), migration `015`
+- [x] **Change detection** (`ksec change`): baselines over assets/findings/jobs/config + deterministic drift scans that flag added/removed/changed state and raise notifications (spec 08 #59), migration `015`
+- [x] **Job operations**: `ksec job logs <id>` (captured stdout/stderr), `job retry <id>` (fresh resubmit, never re-runs the record), `job trace <id>` (session/schedule/audit lineage) and `job health` (live scheduler state)
+- [x] **Report preview + PDF export**: `ksec report preview` renders a report without storing it; `report create --format pdf` and `report export <id>` write a printable PDF — pure stdlib, zero dependencies
+- [x] **Activity views**: `ksec history` (chronological timeline across runs/audit/jobs) and `ksec graph` (engagements → assets → findings → cases/evidence relationships)
+- [x] **Learn practice drills** (`ksec learn practice`): hands-on authorized drills with per-user attempts + pass status (`practice list|start|pass`), migration `015`
+- [x] **Event-driven workflow triggers** (`ksec workflow trigger`): event_type + target-glob → workflow bindings fired through the normal policy gate (`trigger add|list|remove|enable|disable|fire`), beyond cron schedules, migration `015`
 - [x] CLI: `init status doctor version config env tools session engagement
       assess job asset finding evidence case report learn workflow dfir intel
       plugin adversary vuln atomic soc siem run backup tui dashboard ask role api
-      stop db export grc malware endpoint mode`
-- [x] 445 unit tests (stdlib unittest, no dependencies) + 272-check CLI smoke suite
+      stop db export grc malware endpoint mode module purple change history graph`
+- [x] 477 unit tests (stdlib unittest, no dependencies) + 329-check CLI smoke suite
   (`python3 -m unittest discover -s tests` / `bash scripts/smoke.sh`)
-- [x] Migrations `001`–`014`
-- [x] **v0.3.0** — changelog in `CHANGELOG.md`; docs in [`docs/`](docs/README.md)
+- [x] Migrations `001`–`015`
+- [x] **v0.4.0** — changelog in `CHANGELOG.md`; docs in [`docs/`](docs/README.md)
 
-## Quick start (no installation required)
+## Requirements
+
+- **Kali Linux** (recommended — KSEC discovers the tools already installed)
+  or any Debian-based Linux with Python **3.11+**
+- Python 3 only — **zero third-party dependencies** (`dependencies = []`),
+  100% offline, **no AI / no cloud**
+
+## Install on Kali Linux
+
+### Option A — quick clone & run (no install, ~10 seconds)
 
 ```bash
-# Run from the repository root
+cd /opt
+git clone https://github.com/Tareer1/KSEC.git
+cd KSEC
+python3 -m venv .venv            # optional but tidy
+source .venv/bin/activate
+export PYTHONPATH=src            # point Python at the source
+python3 -m ksec --version
+```
+
+### Option B — install the `ksec` command system-wide
+
+```bash
+cd /opt/KSEC
 export PYTHONPATH=src
-
-# Initialize: creates config, database, roles and the admin user
-python3 -m ksec init --username admin --password 'change-me'
-
-# Check platform status and health
-python3 -m ksec status
-python3 -m ksec doctor
-
-# User management
-python3 -m ksec admin user list
-python3 -m ksec admin user create --username analyst --password 's3cret' --role operator
-
-# Or install the `ksec` command into your environment
 pip install -e .
+which ksec                       # -> /usr/local/bin/ksec (or your venv/bin)
 ksec version
+```
+
+After either option, run the one-time initialization:
+
+```bash
+ksec init --username admin --password 'change-me'   # creates config, DB, roles, admin
+ksec status                                          # is everything healthy?
+ksec doctor                                           # full health checks
+ksec tools list                                       # which Kali tools KSEC found
+```
+
+> KSEC stores its state in `~/.config/ksec/` (override with `KSEC_HOME`).
+> Nothing ever leaves your machine.
+
+## First run — the 5-command loop
+
+KSEC only runs against **authorized targets** (written scope) — this is the
+core safety model. The daily pattern is always:
+
+```bash
+# 1. Authorization first (without this nothing runs)
+ksec engagement create --name pentest-1
+ksec engagement scope add --engagement 1 --target example.com --effect allow
+
+# 2. Open a role + workspace session
+ksec session open --user admin --password 'change-me' --workspace RED_TEAM --role admin
+
+# 3. Run a workflow — KSEC picks the right Kali tool itself
+ksec assess example.com --engagement 1 --user admin --password 'change-me' --workflow recon
+
+# 4. Document what you found
+ksec finding create --title "Open port 443" --severity medium --risk --engagement 1
+ksec evidence add --content "..." --tool nmap --engagement 1
+ksec case create --title "Issue #1" --engagement 1
+
+# 5. Produce the report
+ksec report create --engagement 1 --title "Pentest Report"
+ksec report export 1 --out report.pdf
+```
+
+Try it with `--dry-run` first to see the policy plan without executing:
+
+```bash
+ksec assess example.com --engagement 1 --user admin --password 'change-me' --dry-run --explain
+```
+
+## Every command group
+
+```bash
+ksec init status doctor version config env          # core
+ksec admin                                          # users, roles, RBAC
+ksec session                                        # 5-workspace sessions
+ksec engagement                                     # authorized scope
+ksec assess / ksec run / ksec workflow              # run workflows (DAG, retry)
+ksec job                                            # jobs, schedules, retry, logs
+ksec module                                         # api/wireless/cloud/container/k8s
+ksec tools                                          # Kali tool discovery
+ksec asset finding evidence case report             # security data
+ksec purple                                         # coordinated red+blue exercises
+ksec change                                         # baseline + drift detection
+ksec soc siem                                       # alert pipeline + ingestion
+ksec dfir intel malware endpoint grc                # DFIR, intel, malware, GRC
+ksec adversary atomic                               # adversary simulation
+ksec learn                                          # curriculum + practice drills
+ksec role / ksec suggest / ksec ask                 # in-tool mentor (offline)
+```
+
+Run any group with `--help` for its full subcommands:
+
+```bash
+ksec module --help
+ksec purple --help
+ksec report --help
 ```
 
 ## Architecture

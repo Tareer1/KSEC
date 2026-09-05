@@ -11,12 +11,16 @@ from ksec.adapters.curl import CurlAdapter
 from ksec.adapters.dns import DigAdapter
 from ksec.adapters.dnsrecon import DnsreconAdapter
 from ksec.adapters.enum4linux import Enum4LinuxAdapter
+from ksec.adapters.ffuf import FfufAdapter
 from ksec.adapters.gobuster import GobusterAdapter
 from ksec.adapters.hydra import HydraAdapter
 from ksec.adapters.nikto import NiktoAdapter
 from ksec.adapters.nmap import NmapAdapter
+from ksec.adapters.nxc import NxcAdapter
 from ksec.adapters.null import NullAdapter
+from ksec.adapters.searchsploit import SearchsploitAdapter
 from ksec.adapters.smbmap import SmbMapAdapter
+from ksec.adapters.sqlmap import SqlmapAdapter
 from ksec.adapters.sslscan import SslScanAdapter
 from ksec.adapters.theharvester import TheHarvesterAdapter
 from ksec.adapters.whatweb import WhatwebAdapter
@@ -28,12 +32,16 @@ _BUILTIN_ADAPTERS: tuple[ToolAdapter, ...] = (
     CurlAdapter(),
     SslScanAdapter(),
     GobusterAdapter(),
+    FfufAdapter(),
     NiktoAdapter(),
     DnsreconAdapter(),
     WpscanAdapter(),
     HydraAdapter(),
     Enum4LinuxAdapter(),
     SmbMapAdapter(),
+    NxcAdapter(),
+    SqlmapAdapter(),
+    SearchsploitAdapter(),
     WhatwebAdapter(),
     TheHarvesterAdapter(),
     NullAdapter(),

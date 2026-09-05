@@ -1246,6 +1246,35 @@ Shortcuts for the built-in workflows of the same name (same flags as
 - `research` → dns_lookup + dns_enum + osint_harvest
 - `osint` → osint_harvest + dns_lookup
 
+## 28.10c Real-world red team — exploit intelligence (searchsploit/sqlmap/ffuf/nxc)
+
+```bash
+# Version -> known public exploits (local Exploit-DB, read-only, legal)
+python3 -m ksec exploit search "apache 2.4.49"
+python3 -m ksec exploit search CVE-2021-41773
+python3 -m ksec exploit map "apache 2.4.49" --engagement 1 --user red --password ...
+
+# Or run through the same scheduler as any capability/workflow
+python3 -m ksec run exploit_search "apache 2.4.49" --engagement 1 --user red
+python3 -m ksec run exploit_lookup example.com --engagement 1 --user red
+
+# Real offensive testing, always scope-gated
+python3 -m ksec run sqli_test http://lab.local --engagement 1 --user red
+python3 -m ksec run web_fuzz http://lab.local --engagement 1 --user red
+python3 -m ksec run smb_cred_test lab.local --engagement 1 --user red
+```
+
+- `exploit search` queries the local exploitdb database (Kali `exploitdb`
+  package) — the same data professional red teams use, fully offline.
+- `exploit map` auto-creates findings only for **verified** exploits,
+  carrying the EDB-ID and CVE codes.
+- New capabilities: `exploit_search` (searchsploit), `sqli_test`
+  (sqlmap — batch, conservative level/risk), `web_fuzz` (ffuf),
+  `smb_cred_test` (nxc). All run through the normal authorization gate.
+- **Boundary (by design):** real exploitation of unknown/unpatched
+  vulnerabilities (zero-day weaponization, payloads, meterpreter) is not
+  part of KSEC — it stays an authorized testing platform.
+
 ## 28.11 Domain modules: api / wireless / cloud / container / kubernetes (spec 08 #23-27)
 
 ```bash

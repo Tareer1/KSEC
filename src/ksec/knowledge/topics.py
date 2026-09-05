@@ -915,6 +915,12 @@ TOPICS: tuple[Topic, ...] = (
             ("cmd", "ksec run directory_brute lab-target.example --engagement 1 --user red"),
             ("cmd", "ksec run web_vuln_scan lab-target.example --engagement 1 --user red"),
             ("cmd", "ksec run wpscan lab-target.example --engagement 1 --user red"),
+            ("p", "STEP 3.5 — EXPLOIT INTELLIGENCE (real-world red team): map discovered software versions to known public exploits in the local Exploit-DB, and test real injection/access paths — all inside the authorized scope."),
+            ("cmd", "ksec exploit search 'apache 2.4.49'"),
+            ("cmd", "ksec exploit map 'apache 2.4.49' --engagement 1 --user red"),
+            ("cmd", "ksec run sqli_test http://lab-target.example --engagement 1 --user red"),
+            ("cmd", "ksec run web_fuzz http://lab-target.example --engagement 1 --user red"),
+            ("cmd", "ksec run smb_cred_test lab-target.example --engagement 1 --user red"),
             ("p", "STEP 4 — VALIDATE access like a real intrusion (only against in-scope targets): credential/authentication testing, SMB access, TLS gaps."),
             ("cmd", "ksec run auth_test lab-target.example --engagement 1 --user red"),
             ("cmd", "ksec run smb_enum lab-target.example --engagement 1 --user red"),
@@ -1313,6 +1319,31 @@ TOPICS: tuple[Topic, ...] = (
         ),
     ),
     Topic(
+        id="exploit-intelligence",
+        title="Exploit intelligence — version to known public exploit (real-world red team)",
+        kind="module",
+        audience=("red", "purple", "all"),
+        summary=(
+            "ksec exploit maps discovered software versions to public exploits in the local "
+            "Exploit-DB (searchsploit) — the professional step between 'version found' and "
+            "'known exploit exists'. Read-only local lookup; nothing is executed against the "
+            "target. Real SQLi/fuzzing/SMB-credential testing run through sqli_test, "
+            "web_fuzz and smb_cred_test capabilities, always scope-gated."
+        ),
+        keywords=("exploit", "exploit-db", "searchsploit", "cve", "edb", "zeroday", "zero day", "0-day", "sql injection", "sqlmap", "ffuf", "fuzz", "netexec", "nxc", "credential", "exploit search", "exploit lookup"),
+        sections=(
+            ("p", "searchsploit queries the local exploitdb database installed on Kali. This is exactly how professional red teams learn whether a discovered version has a public exploit — no target interaction, fully legal, and the same data real attackers use."),
+            ("cmd", "ksec exploit search 'apache 2.4.49'"),
+            ("cmd", "ksec exploit search CVE-2021-41773"),
+            ("cmd", "ksec exploit map 'apache 2.4.49' --engagement 1 --user red"),
+            ("cmd", "ksec run exploit_search 'apache 2.4.49' --engagement 1 --user red"),
+            ("cmd", "ksec run sqli_test http://lab.local --engagement 1 --user red"),
+            ("cmd", "ksec run web_fuzz http://lab.local --engagement 1 --user red"),
+            ("cmd", "ksec run smb_cred_test lab.local --engagement 1 --user red"),
+            ("tip", "exploit map auto-creates findings only for VERIFIED exploits — and the scope gate always applies. Zero-day exploitation (unknown, unpatched attacks) is outside KSEC by design; professional teams use version->known-exploit matching instead."),
+        ),
+    ),
+    Topic(
         id="top-level-shortcuts",
         title="Top-level shortcuts: recon / network / web / research / osint",
         kind="workflow",
@@ -1381,6 +1412,15 @@ ALIASES: dict[str, str] = {
     "practice": "learn-practice",
     "trigger": "workflow-triggers",
     "webhook": "workflow-triggers",
+    "exploit": "exploit-intelligence",
+    "exploit-db": "exploit-intelligence",
+    "searchsploit": "exploit-intelligence",
+    "cve": "exploit-intelligence",
+    "sql injection": "exploit-intelligence",
+    "zeroday": "exploit-intelligence",
+    "0-day": "exploit-intelligence",
+    "sqlmap": "exploit-intelligence",
+    "ffuf": "exploit-intelligence",
 }
 
 

@@ -13,6 +13,17 @@ All notable changes are tracked here. Format follows
   recon (dns+ports), network (ports+smb), web (fingerprint+probe+tls+
   vulns+directories), research (dns+dnsrecon+osint) and osint
   (harvest+dns).
+- **Real-world red team — exploit intelligence**: `ksec exploit search
+  <product/version/CVE>` queries the local Exploit-DB (searchsploit) for
+  public exploits — read-only, offline, the professional step between
+  "version found" and "known exploit exists". `ksec exploit map`
+  auto-creates findings for verified exploits (EDB-ID + CVE in the
+  finding). New scope-gated offensive capabilities with adapters,
+  parsers and catalog entries: `sqli_test` (sqlmap — batch, conservative),
+  `web_fuzz` (ffuf), `smb_cred_test` (nxc) and the `exploit_lookup`
+  workflow. Every job still passes the normal authorization gate.
+  Boundary stays intact by design: no weaponized payloads/zero-day
+  exploitation — KSEC remains an authorized testing platform.
 
 - **5 domain modules** (`ksec module`): API Security, Wireless, Cloud,
   Container and Kubernetes (spec 08 #23-27). Each declares its Kali

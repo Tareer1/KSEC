@@ -104,6 +104,14 @@ WORKFLOWS: dict[str, WorkflowDefinition] = {
             WorkflowStep("dns_lookup"),
         ),
     ),
+    "exploit_lookup": WorkflowDefinition(
+        name="exploit_lookup",
+        description="Real-world red team: map discovered software to known public exploits.",
+        steps=(
+            WorkflowStep("web_fingerprint"),
+            WorkflowStep("exploit_search", {"retry": 1, "retry_delay": 0.5}),
+        ),
+    ),
 }
 
 

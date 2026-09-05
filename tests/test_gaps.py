@@ -1103,3 +1103,162 @@ class TopLevelShortcutsTest(KsecTestCase):
             # Every step must be a capability the platform knows how to run.
             for step in definition.steps:
                 self.assertIsNotNone(self.ctx.adapters.get(step.capability), step.capability)
+
+
+class ExploitIntelligenceTest(KsecTestCase):
+    """Real-world red team: searchsploit/sqlmap/ffuf/nxc integration."""
+
+    def setUp(self):
+        super().setUp()
+        self.ctx = self.make_context()
+
+    def tearDown(self):
+        self.ctx.close()
+        super().tearDown()
+
+    def test_capabilities_registered(self):
+        for cap in ("exploit_search", "sqli_test", "web_fuzz", "smb_cred_test"):
+            self.assertIsNotNone(self.ctx.adapters.get(cap), cap)
+        known = self.ctx.workflow_store.known_capabilities()
+        for cap in ("exploit_search", "sqli_test", "web_fuzz", "smb_cred_test"):
+            self.assertIn(cap, known)
+
+    def test_catalog_tools_ready(self):
+        found = {t.capability for t in self.ctx.capabilities.definitions()}
+        self.assertIn("exploit_search", found)
+        self.assertIn("sqli_test", found)
+        self.assertIn("web_fuzz", found)
+        self.assertIn("smb_cred_test", found)
+
+    def test_searchsploit_adapter_builds_command(self):
+        from ksec.adapters.base import CommandRequest
+
+        adapter = self.ctx.adapters.get("exploit_search")
+        cmd = adapter.build_command(
+            CommandRequest(capability="exploit_search", target="apache 2.4.49")
+        )
+        self.assertEqual(cmd[0], "searchsploit")
+        self.assertIn("--json", cmd)
+
+    def test_searchsploit_parser(self):
+        from ksec.parsers.searchsploit import SearchsploitParser
+
+        output = '{"RESULTS_EXPLOIT": [{"EDB-ID": "50383", "Title": "Apache 2.4.49 RCE", "Type": "remote", "Platform": "linux", "Codes": "CVE-2021-41773", "Verified": "1"}]}'
+        result = SearchsploitParser().parse(output)
+        self.assertEqual(len(result.entities), 1)
+        entity = result.entities[0]
+        self.assertEqual(entity["type"], "exploit")
+        self.assertEqual(entity["edb_id"], "50383")
+        self.assertIn("CVE-2021-41773", entity["cve"])
+        self.assertTrue(entity["verified"])
+
+    def test_sqlmap_adapter_and_parser(self):
+        from ksec.adapters.base import CommandRequest
+
+        adapter = self.ctx.adapters.get("sqli_test")
+        cmd = adapter.build_command(
+            CommandRequest(capability="sqli_test", target="example.com")
+        )
+        self.assertEqual(cmd[0], "sqlmap")
+        self.assertIn("--batch", cmd)
+        self.assertTrue(any(a.startswith("http://") for a in cmd))
+
+        from ksec.parsers.sqlmap import SqlmapParser
+
+        output = (
+            "sqlmap identified the following injection point(s):\n"
+            "Parameter: id (GET)\n    Type: boolean-based blind\n"
+            "    Title: AND boolean-based blind\n"
+            "Parameter: user (POST)\n    Type: UNION query\n"
+            "    Title: Generic UNION query\n"
+        )
+        result = SqlmapParser().parse(output)
+        self.assertEqual(len(result.entities), 2)
+        self.assertEqual(result.entities[0]["parameter"], "id")
+        self.assertEqual(result.entities[0]["injection_type"], "boolean-based blind")
+
+    def test_ffuf_adapter_and_parser(self):
+        from ksec.adapters.base import CommandRequest
+
+        adapter = self.ctx.adapters.get("web_fuzz")
+        cmd = adapter.build_command(
+            CommandRequest(capability="web_fuzz", target="example.com")
+        )
+        self.assertEqual(cmd[0], "ffuf")
+        self.assertIn("FUZZ", " ".join(cmd))
+
+        from ksec.parsers.ffuf import FfufParser
+
+        result = FfufParser().parse(
+            '{"results": [{"url": "http://example.com/admin", "status": 200, "length": 123}]}'
+        )
+        self.assertEqual(len(result.entities), 1)
+        self.assertEqual(result.entities[0]["status"], 200)
+
+    def test_nxc_adapter_and_parser(self):
+        from ksec.adapters.base import CommandRequest
+
+        adapter = self.ctx.adapters.get("smb_cred_test")
+        cmd = adapter.build_command(
+            CommandRequest(
+                capability="smb_cred_test", target="10.0.0.5",
+                options={"user": "admin", "password": "pw"},
+            )
+        )
+        self.assertEqual(cmd[0], "nxc")
+        self.assertIn("-u", cmd)
+
+        from ksec.parsers.nxc import NxcParser
+
+        output = (
+            "SMB         10.0.0.5     445    HOST1     [*] Windows 10\n"
+            "SMB         10.0.0.5     445    HOST1     [+] HOST1\\admin:pw (Pwn3d!)\n"
+        )
+        result = NxcParser().parse(output)
+        self.assertTrue(any(e["type"] == "auth_finding" and e.get("admin") for e in result.entities))
+
+    def test_exploit_lookup_workflow_defined(self):
+        definition = self.ctx.workflow_store.resolve("exploit_lookup")
+        self.assertIsNotNone(definition)
+        caps = [s.capability for s in definition.steps]
+        self.assertIn("exploit_search", caps)
+
+    def test_exploit_map_creates_findings_for_verified(self):
+        from ksec.identity.users import UserRepository
+
+        repo = UserRepository(self.ctx.db)
+        user = repo.create("red", "pw")
+        self.ctx.rbac.assign_role(user.id, "operator")
+        eng = self.ctx.authz.create_engagement("exploit-eng")
+
+        import subprocess
+
+        def fake_run(*args, **kwargs):
+            return subprocess.CompletedProcess(
+                args=args[0],
+                returncode=0,
+                stdout=(
+                    '{"RESULTS_EXPLOIT": [{"EDB-ID": "42", "Title": "T", "Type": "remote",'
+                    ' "Platform": "linux", "Codes": "CVE-2021-1", "Verified": "1"}]}'
+                ),
+            )
+
+        import ksec.cli.exploit as exploit_cli
+
+        original = subprocess.run
+        subprocess.run = fake_run
+        try:
+            from ksec.cli.exploit import cmd_exploit_map
+            from types import SimpleNamespace
+
+            args = SimpleNamespace(
+                query="anything", engagement=eng.id, user="red", password="pw",
+                json=False, quiet=False,
+            )
+            rc = cmd_exploit_map(self.ctx, args)
+            self.assertEqual(rc, 0)
+        finally:
+            subprocess.run = original
+        findings = self.ctx.findings.list(engagement_id=eng.id)
+        self.assertEqual(len(findings), 1)
+        self.assertIn("EDB-42", findings[0].title)

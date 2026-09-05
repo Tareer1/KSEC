@@ -546,6 +546,23 @@ else
   printf '%s\n' "$BLOCK_OUT" | head -4 | sed 's/^/      /'
 fi
 
+say "36c. real-world red team: exploit intelligence + offensive capabilities"
+run_clean "exploit search (local DB)" "${BIN[@]}" exploit search "apache 2.4.49"
+run_ok "exploit search --json" "${BIN[@]}" exploit search "apache 2.4.49" --json
+run_grep "exploit search finds EDB ids" 'EDB-' "${BIN[@]}" exploit search "apache 2.4.49"
+run_ok "exploit map creates findings" "${BIN[@]}" exploit map "apache 2.4.49" --engagement 1 --user "$ADMIN" --password "$APW"
+run_grep "exploit findings in list" 'Public exploit available' "${BIN[@]}" finding list --engagement 1
+run_ok "help: exploit" "${BIN[@]}" exploit --help
+# new offensive capabilities are scope-gated and registered
+run_grep "tools capabilities shows exploit_search" 'exploit_search' "${BIN[@]}" tools capabilities
+run_grep "tools capabilities shows sqli_test" 'sqli_test' "${BIN[@]}" tools capabilities
+run_ok "exploit_lookup workflow dry-run" "${BIN[@]}" run exploit_lookup example.com --engagement 1 --user "$ADMIN" --password "$APW" --dry-run
+run_ok "sqli_test dry-run" "${BIN[@]}" run sqli_test example.com --engagement 1 --user "$ADMIN" --password "$APW" --dry-run
+run_ok "web_fuzz dry-run" "${BIN[@]}" run web_fuzz example.com --engagement 1 --user "$ADMIN" --password "$APW" --dry-run
+run_ok "smb_cred_test dry-run" "${BIN[@]}" run smb_cred_test example.com --engagement 1 --user "$ADMIN" --password "$APW" --dry-run
+run_grep "role blackhat mentions exploit intelligence" 'exploit search' "${BIN[@]}" role blackhat
+run_grep "ask routes to exploit intelligence" 'Exploit-DB' "${BIN[@]}" ask "exploit search kya hai"
+
 say "37. domain modules + purple + change detection"
 run_ok "module list"       "${BIN[@]}" module list
 run_ok "module info api"   "${BIN[@]}" module info api

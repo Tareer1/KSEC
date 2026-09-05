@@ -27,6 +27,7 @@ from ksec.cli import data as data_commands
 from ksec.cli import db as db_commands
 from ksec.cli import dfir as dfir_commands
 from ksec.cli import endpoint as endpoint_commands
+from ksec.cli import exploit as exploit_commands
 from ksec.cli import export as export_commands
 from ksec.cli import grc as grc_commands
 from ksec.cli import malware as malware_commands
@@ -1138,6 +1139,19 @@ def build_parser() -> argparse.ArgumentParser:
     mo_check.add_argument("module")
     mo_check.add_argument("--user", default=None)
     mo_check.set_defaults(func=module_commands.cmd_module_check)
+
+    # public-exploit lookup (real-world red team: version -> known exploit)
+    p_exploit = sub.add_parser("exploit", help="Local Exploit-DB lookup: product/version/CVE -> public exploits (searchsploit)", parents=[common_sub])
+    ex_sub = p_exploit.add_subparsers(dest="exploit_command", metavar="EXPLOIT_COMMAND")
+    ex_search = ex_sub.add_parser("search", help="Search local Exploit-DB (read-only)", parents=[common_sub])
+    ex_search.add_argument("query", help="Product/version/CVE, e.g. 'apache 2.4.49' or CVE-2021-41773")
+    ex_search.set_defaults(func=exploit_commands.cmd_exploit_search)
+    ex_map = ex_sub.add_parser("map", help="Search + auto-create findings for verified exploits", parents=[common_sub])
+    ex_map.add_argument("query")
+    ex_map.add_argument("--engagement", type=int, default=None)
+    ex_map.add_argument("--user", required=True)
+    ex_map.add_argument("--password", default=None)
+    ex_map.set_defaults(func=exploit_commands.cmd_exploit_map)
 
     # purple team exercises (spec 08 #28)
     p_purple = sub.add_parser("purple", help="Coordinated purple-team exercises (red+blue)", parents=[common_sub])

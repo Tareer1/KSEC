@@ -112,11 +112,12 @@ Implemented so far (spec Stages 1–9 core, interfaces included):
 - [x] **Activity views**: `ksec history` (chronological timeline across runs/audit/jobs) and `ksec graph` (engagements → assets → findings → cases/evidence relationships)
 - [x] **Learn practice drills** (`ksec learn practice`): hands-on authorized drills with per-user attempts + pass status (`practice list|start|pass`), migration `015`
 - [x] **Event-driven workflow triggers** (`ksec workflow trigger`): event_type + target-glob → workflow bindings fired through the normal policy gate (`trigger add|list|remove|enable|disable|fire`), beyond cron schedules, migration `015`
+- [x] **Real-world red team — exploit intelligence** (`ksec exploit`): local Exploit-DB lookup maps discovered software versions to known public exploits (`exploit search` / `exploit map` — auto-findings for verified exploits with CVE + EDB-ID). New scope-gated offensive capabilities: `sqli_test` (sqlmap), `web_fuzz` (ffuf), `smb_cred_test` (nxc) and the `exploit_lookup` workflow
 - [x] CLI: `init status doctor version config env tools session engagement
       assess job asset finding evidence case report learn workflow dfir intel
       plugin adversary vuln atomic soc siem run backup tui dashboard ask role api
       stop db export grc malware endpoint mode module purple change history graph`
-- [x] 477 unit tests (stdlib unittest, no dependencies) + 329-check CLI smoke suite
+- [x] 488 unit tests (stdlib unittest, no dependencies) + 354-check CLI smoke suite
   (`python3 -m unittest discover -s tests` / `bash scripts/smoke.sh`)
 - [x] Migrations `001`–`015`
 - [x] **v0.4.0** — changelog in `CHANGELOG.md`; docs in [`docs/`](docs/README.md)
@@ -209,6 +210,7 @@ ksec job                                            # jobs, schedules, retry, lo
 ksec module                                         # api/wireless/cloud/container/k8s
 ksec tools                                          # Kali tool discovery
 ksec asset finding evidence case report             # security data
+ksec exploit                                        # version -> known public exploits (local Exploit-DB)
 ksec purple                                         # coordinated red+blue exercises
 ksec change                                         # baseline + drift detection
 ksec soc siem                                       # alert pipeline + ingestion

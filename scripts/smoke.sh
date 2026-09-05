@@ -526,6 +526,12 @@ run_ok "tools list --missing" "${BIN[@]}" tools list --missing
 run_ok "tools docs" "${BIN[@]}" tools docs nmap
 run_ok "global --debug --no-color" "${BIN[@]}" --debug --no-color version
 run_ok "global --config" "${BIN[@]}" --config "$KSEC_CONFIG" version
+run_ok "suggest red" "${BIN[@]}" suggest red
+run_ok "suggest learner" "${BIN[@]}" suggest learner
+run_ok "suggest blackhat" "${BIN[@]}" suggest blackhat
+run_grep "suggest blue suggests a detection rule" 'Add a detection rule' "${BIN[@]}" suggest blue
+run_grep "role red trailer has NEXT" 'NEXT — ab kya karna hai' "${BIN[@]}" role red
+expect_fail "suggest unknown role" "${BIN[@]}" suggest hacker
 
 # ---------------------------------------------------------------------------
 echo

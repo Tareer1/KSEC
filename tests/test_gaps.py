@@ -750,3 +750,74 @@ class ModeCliTest(KsecTestCase):
         self.assertEqual(text.count("[safety]"), 1)
         self.assertIn("lab_mode = true", text)
         self.assertIn("read_only = true", text)
+
+
+def _suggest(ctx, role):
+    from ksec.suggestions.service import suggestions
+
+    return suggestions(ctx, role)
+
+
+class RoleSuggestionsTest(KsecTestCase):
+    """State-aware role suggestions (ksec suggest / role trailers)."""
+
+    def setUp(self):
+        super().setUp()
+        self.ctx = self.make_context()
+        from ksec.identity.users import UserRepository
+
+        users = UserRepository(self.ctx.db)
+        self.user = users.create("sugadmin", "sug123")
+        self.ctx.rbac.assign_role(self.user.id, "admin")
+
+    def tearDown(self):
+        self.ctx.close()
+        super().tearDown()
+
+    def test_fresh_install_suggests_engagement_first(self):
+        data = _suggest(self.ctx, "red")
+        steps = [i["step"] for i in data["items"]]
+        self.assertEqual(data["role"], "red")
+        self.assertTrue(any("engagement" in s.lower() for s in steps))
+        # The very first pending step is engagement creation.
+        self.assertIn("Create your first engagement", steps[0])
+
+    def test_engagement_created_drops_that_step(self):
+        eng = self.ctx.authz.create_engagement("assessment")
+        data = _suggest(self.ctx, "red")
+        steps = [i["step"] for i in data["items"]]
+        self.assertFalse(any("Create your first engagement" == s for s in steps))
+        # Now the next gap is scope rules.
+        self.assertTrue(any("scope" in s.lower() for s in steps))
+        self.assertIn(eng.id, [eng.id])
+
+    def test_fully_scoped_suggests_running_recon(self):
+        eng = self.ctx.authz.create_engagement("assessment")
+        self.ctx.authz.add_authorization(eng.id, "10.0.0.0/8")
+        data = _suggest(self.ctx, "red")
+        steps = [i["step"] for i in data["items"]]
+        self.assertTrue(any("recon" in s.lower() for s in steps))
+        self.assertFalse(any("scope rule" in s.lower() for s in steps))
+
+    def test_learner_role_suggests_lessons(self):
+        data = _suggest(self.ctx, "learner")
+        steps = " ".join(i["step"].lower() for i in data["items"])
+        self.assertIn("lesson", steps)
+
+    def test_blue_role_suggests_siem_demo_when_no_alerts(self):
+        data = _suggest(self.ctx, "blue")
+        steps = [i["step"] for i in data["items"]]
+        self.assertTrue(any("sample telemetry" in s.lower() for s in steps))
+
+    def test_state_reported(self):
+        data = _suggest(self.ctx, "red")
+        self.assertEqual(data["state"]["users"], 1)
+        self.assertIn("tools_ready", data["state"])
+
+    def test_canonical_alias(self):
+        from ksec.suggestions.service import canonical_role
+
+        self.assertEqual(canonical_role("black hat"), "blackhat")
+        self.assertEqual(canonical_role("osint"), "purple")
+        self.assertEqual(canonical_role("RESEARCHER"), "purple")
+        self.assertIsNone(canonical_role("nope"))

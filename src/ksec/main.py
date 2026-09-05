@@ -888,11 +888,19 @@ def build_parser() -> argparse.ArgumentParser:
 
     p_role = sub.add_parser(
         "role",
-        help="Show a role playbook: red | blue | purple | blackhat | learner",
+        help="Show a role playbook: red | blue | purple | blackhat | learner (+ live next-step suggestions)",
         parents=[common_sub],
     )
     p_role.add_argument("name", help="red | blue | purple | blackhat | learner")
     p_role.set_defaults(func=ask_commands.cmd_role)
+
+    p_suggest = sub.add_parser(
+        "suggest",
+        help="What to do now for a role (state-aware suggestions)",
+        parents=[common_sub],
+    )
+    p_suggest.add_argument("role", help="red | blue | purple | blackhat | learner")
+    p_suggest.set_defaults(func=ask_commands.cmd_suggest)
 
     # REST API + tokens (scripts / SIEM integration)
     p_api = sub.add_parser("api", help="REST API: bearer tokens + server", parents=[common_sub])

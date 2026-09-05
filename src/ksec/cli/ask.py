@@ -5,7 +5,8 @@ address", "nmap kya hai") to role playbooks ("red team kaise shuru
 karun") — with curated topics plus the exact commands to run.
 ``ksec role red|blue|purple|blackhat|learner`` is a shortcut to the
 role playbooks (blackhat = controlled authorized emulation of a real
-intruder's mindset, never unrestricted activity).
+intruder's mindset, never unrestricted activity). Every role also gets
+live, state-aware "what to do now" suggestions (``ksec suggest``).
 """
 from __future__ import annotations
 
@@ -13,6 +14,7 @@ from ksec.bootstrap import KsecContext
 from ksec.cli.output import emit
 from ksec.knowledge.service import KnowledgeService
 from ksec.knowledge.topics import Topic
+from ksec.suggestions.service import canonical_role, suggestions
 
 KIND_LABEL = {
     "concept": "concepts",
@@ -119,6 +121,24 @@ def cmd_ask(ctx: KsecContext, args) -> int:
     return 0
 
 
+def _render_suggestions(role: str, data: dict) -> str:
+    items = data.get("items", [])
+    if not items:
+        return ""
+    out = ["", "NEXT — ab kya karna hai (live suggestions)", "=" * 40]
+    for i, item in enumerate(items, 1):
+        out.append(f"{i}. {item['step']}")
+        out.append(f"    $ {item['command']}")
+        out.append(f"    why: {item['reason']}")
+    state = data.get("state", {})
+    if state:
+        out.append("")
+        out.append("your state: " + ", ".join(
+            f"{k}={v}" for k, v in sorted(state.items())
+        ))
+    return "\n".join(out)
+
+
 def cmd_role(ctx: KsecContext, args) -> int:
     knowledge = KnowledgeService()
     role_map = {
@@ -142,11 +162,37 @@ def cmd_role(ctx: KsecContext, args) -> int:
         )
         return 1
     related = knowledge.related(topic.id)
+    role = canonical_role(name) or "red"
     if args.json:
-        emit(_answer_data(topic, f"role {name}", related), True, False)
+        data = _answer_data(topic, f"role {name}", related)
+        data["suggestions"] = suggestions(ctx, role)
+        emit(data, True, False)
     elif args.quiet:
         print(topic.id)
     else:
         mode = getattr(args, "mode", None) or "professional"
         print(_render_topic(topic, mode, related))
+        print(_render_suggestions(role, suggestions(ctx, role)))
+    return 0
+
+
+def cmd_suggest(ctx: KsecContext, args) -> int:
+    """Show state-aware next actions for a role (``ksec suggest red``)."""
+    role = canonical_role(args.role or "") if args.role else ""
+    if not role:
+        emit(
+            f"unknown role: {args.role} (choose red | blue | purple | blackhat | learner)",
+            args.json,
+            args.quiet,
+        )
+        return 1
+    data = suggestions(ctx, role)
+    if args.json:
+        emit(data, True, False)
+    elif args.quiet:
+        for item in data["items"]:
+            print(item["command"])
+    else:
+        print(f"{data['label']} — what to do now:")
+        print(_render_suggestions(role, data).strip())
     return 0

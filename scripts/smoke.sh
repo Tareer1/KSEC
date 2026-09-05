@@ -60,6 +60,47 @@ run_clean() {
   fi
 }
 
+# Skip bookkeeping: checks that need a real Kali tool skip (not fail) when
+# the tool is absent, so the suite stays green on bare CI runners and on
+# Kali boxes alike (KSEC discovers whatever tools are actually installed).
+SKIP=0
+
+# have_tool NAME -> 0 when the binary is installed
+have_tool() {
+  command -v "$1" >/dev/null 2>&1
+}
+
+# run_ok_skip DESC TOOL CMD... -> run_ok, but SKIP if TOOL is missing
+run_ok_skip() {
+  local desc="$1"; local tool="$2"; shift 2
+  if ! have_tool "$tool"; then
+    SKIP=$((SKIP + 1)); echo "SKIP  $desc (tool '$tool' not installed)"
+    return 0
+  fi
+  run_ok "$desc" "$@"
+}
+
+# run_clean_skip DESC TOOL CMD... -> run_clean, but SKIP if TOOL is missing
+run_clean_skip() {
+  local desc="$1"; local tool="$2"; shift 2
+  if ! have_tool "$tool"; then
+    SKIP=$((SKIP + 1)); echo "SKIP  $desc (tool '$tool' not installed)"
+    return 0
+  fi
+  run_clean "$desc" "$@"
+}
+
+# run_grep_skip DESC TOOL NEEDLE CMD... -> run_grep, but SKIP if TOOL missing
+run_grep_skip() {
+  local desc="$1"; local tool="$2"; shift 2
+  local needle="$1"; shift
+  if ! have_tool "$tool"; then
+    SKIP=$((SKIP + 1)); echo "SKIP  $desc (tool '$tool' not installed)"
+    return 0
+  fi
+  run_grep "$desc" "$needle" "$@"
+}
+
 # expect_fail DESC CMD... -> must fail cleanly (no traceback)
 expect_fail() {
   local desc="$1"; shift
@@ -547,11 +588,11 @@ else
 fi
 
 say "36c. real-world red team: exploit intelligence + offensive capabilities"
-run_clean "exploit search (local DB)" "${BIN[@]}" exploit search "apache 2.4.49"
-run_ok "exploit search --json" "${BIN[@]}" exploit search "apache 2.4.49" --json
-run_grep "exploit search finds EDB ids" 'EDB-' "${BIN[@]}" exploit search "apache 2.4.49"
-run_ok "exploit map creates findings" "${BIN[@]}" exploit map "apache 2.4.49" --engagement 1 --user "$ADMIN" --password "$APW"
-run_grep "exploit findings in list" 'Public exploit available' "${BIN[@]}" finding list --engagement 1
+run_clean_skip "exploit search (local DB)" searchsploit "${BIN[@]}" exploit search "apache 2.4.49"
+run_ok_skip "exploit search --json" searchsploit "${BIN[@]}" exploit search "apache 2.4.49" --json
+run_grep_skip "exploit search finds EDB ids" searchsploit 'EDB-' "${BIN[@]}" exploit search "apache 2.4.49"
+run_ok_skip "exploit map creates findings" searchsploit "${BIN[@]}" exploit map "apache 2.4.49" --engagement 1 --user "$ADMIN" --password "$APW"
+run_grep_skip "exploit findings in list" searchsploit 'Public exploit available' "${BIN[@]}" finding list --engagement 1
 run_ok "help: exploit" "${BIN[@]}" exploit --help
 # new offensive capabilities are scope-gated and registered
 run_grep "tools capabilities shows exploit_search" 'exploit_search' "${BIN[@]}" tools capabilities
@@ -646,7 +687,7 @@ run_grep "tools capabilities shows password_crack" 'password_crack' "${BIN[@]}" 
 run_grep "tools capabilities shows snmp_enum" 'snmp_enum' "${BIN[@]}" tools capabilities
 run_grep "tools capabilities shows smtp_enum" 'smtp_enum' "${BIN[@]}" tools capabilities
 run_ok "enumerate workflow dry-run (snmp+smtp)" "${BIN[@]}" run enumerate example.com --engagement 1 --user "$ADMIN" --password "$APW" --dry-run
-run_ok "whois_lookup live on example.com" "${BIN[@]}" run whois_lookup example.com --engagement 1 --user "$ADMIN" --password "$APW"
+run_ok_skip "whois_lookup live on example.com" whois "${BIN[@]}" run whois_lookup example.com --engagement 1 --user "$ADMIN" --password "$APW"
 run_ok "whois_lookup dry-run" "${BIN[@]}" run whois_lookup example.com --engagement 1 --user "$ADMIN" --password "$APW" --dry-run
 run_ok "traceroute dry-run" "${BIN[@]}" run traceroute example.com --engagement 1 --user "$ADMIN" --password "$APW" --dry-run
 run_ok "password_crack dry-run" "${BIN[@]}" run password_crack example.com --engagement 1 --user "$ADMIN" --password "$APW" --dry-run
@@ -657,7 +698,7 @@ run_grep "module info wireless shows aircrack" 'aircrack' "${BIN[@]}" module inf
 # ---------------------------------------------------------------------------
 echo
 echo "=========================================="
-echo "smoke: $PASS passed, $FAIL failed"
+echo "smoke: $PASS passed, $FAIL failed, $SKIP skipped"
 if [ "$FAIL" -gt 0 ]; then
   printf 'failed: %s\n' "${FAILED[@]}"
   exit 1

@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import sqlite3
+import sys
 import threading
 from contextlib import contextmanager
 from pathlib import Path
@@ -25,13 +26,21 @@ class Database:
     def connect(self) -> "Database":
         self.path.parent.mkdir(parents=True, exist_ok=True)
         try:
-            # autocommit=True: no implicit transactions; we manage
-            # transactions explicitly via Database.transaction().
+            # No implicit transactions; we manage transactions explicitly via
+            # Database.transaction(). ``autocommit`` exists only on Python
+            # 3.12+; on 3.11 ``isolation_level=None`` provides the same
+            # manual-commit SQLite mode.
             # check_same_thread=False: the scheduler runs jobs on worker
             # threads; the RLock in this class serializes all access.
-            conn = sqlite3.connect(
-                str(self.path), timeout=10, autocommit=True, check_same_thread=False
-            )
+            connect_kwargs: dict[str, object] = {
+                "timeout": 10,
+                "check_same_thread": False,
+            }
+            if sys.version_info >= (3, 12):
+                connect_kwargs["autocommit"] = True
+            else:
+                connect_kwargs["isolation_level"] = None
+            conn = sqlite3.connect(str(self.path), **connect_kwargs)
         except sqlite3.Error as exc:
             raise DatabaseError(f"Failed to open database {self.path}: {exc}") from exc
         conn.row_factory = sqlite3.Row

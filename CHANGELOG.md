@@ -18,6 +18,11 @@ All notable changes are tracked here. Format follows
   `make install` now delegates to it.
 - README + `docs/installation.md` rewritten around the one-command flow,
   with the zsh-vs-bash alias trap documented (Kali's default shell is zsh).
+- **`uninstall.sh`** mirrors `install.sh`: removes the `~/.local/bin/ksec`
+  symlink and the PATH export block (rc files scanned, marker-guarded),
+  deletes the `.venv` with `-y`, and with `-y --purge-state` also removes
+  the KSEC data dir (`$KSEC_HOME`), config dir and the repo clone.
+  Uninstall section of `docs/installation.md` updated.
 
 ## [0.6.0] - 2026-09-05 — full catalog runnable + service enumeration
 

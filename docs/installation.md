@@ -102,18 +102,23 @@ ksec doctor      # health checks: db, migrations, tools, plugins, backup
 
 ## 5. Uninstall
 
-If you installed with `install.sh`:
+If you installed with `install.sh`, `uninstall.sh` reverses it completely:
+
+```bash
+bash uninstall.sh                   # remove the ksec command + PATH entry
+bash uninstall.sh -y                # also delete the .venv
+bash uninstall.sh -y --purge-state  # also delete KSEC data + the repo clone
+```
+
+Without `--purge-state` the repo and your data are kept, so you can reinstall
+or inspect them afterwards. Manual fallback:
 
 ```bash
 rm -f ~/.local/bin/ksec       # remove the command symlink
 rm -rf ~/KSEC/.venv           # remove the virtualenv (keep or delete ~/KSEC)
-```
-
-If you installed manually with pip:
-
-```bash
-pip uninstall ksec            # inside the venv that has it
-rm -rf ~/.ksec                # local state (db, logs, config, backups)
+pip uninstall ksec            # if you installed manually with pip, inside the venv
+rm -rf ~/.local/share/ksec    # local state (db, logs, backups) — default $KSEC_HOME
+rm -rf ~/.config/ksec         # config
 ```
 
 There is no system-level footprint: everything lives under `$KSEC_HOME`.

@@ -879,6 +879,20 @@ def build_parser() -> argparse.ArgumentParser:
     p_run.add_argument("--dry-run", action="store_true")
     p_run.set_defaults(func=workflow_commands.cmd_workflow_run)
 
+    # top-level shortcuts: ksec recon|network|web|research|osint TARGET
+    for _shortcut in ("recon", "network", "web", "research", "osint"):
+        p_shortcut = sub.add_parser(
+            _shortcut, help=f"Shortcut for the {_shortcut} workflow", parents=[common_sub]
+        )
+        p_shortcut.add_argument("target")
+        p_shortcut.add_argument("--engagement", type=int, default=None)
+        p_shortcut.add_argument("--user", required=True)
+        p_shortcut.add_argument("--password", default=None)
+        p_shortcut.add_argument("--workspace", default="RED_TEAM", choices=["RED_TEAM", "BLUE_TEAM", "RESEARCH_OSINT", "ADVERSARY_SIMULATION", "LEARN_WORK"])
+        p_shortcut.add_argument("--role", default=None)
+        p_shortcut.add_argument("--dry-run", action="store_true")
+        p_shortcut.set_defaults(func=workflow_commands.cmd_workflow_run, name=_shortcut)
+
     # backups
     p_backup = sub.add_parser("backup", help="Backup and recovery", parents=[common_sub])
     b_sub = p_backup.add_subparsers(dest="backup_command", metavar="BACKUP_COMMAND")

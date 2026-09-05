@@ -203,6 +203,7 @@ ksec init status doctor version config env          # core
 ksec admin                                          # users, roles, RBAC
 ksec session                                        # 5-workspace sessions
 ksec engagement                                     # authorized scope
+ksec recon network web research osint                 # top-level workflow shortcuts
 ksec assess / ksec run / ksec workflow              # run workflows (DAG, retry)
 ksec job                                            # jobs, schedules, retry, logs
 ksec module                                         # api/wireless/cloud/container/k8s

@@ -67,6 +67,43 @@ WORKFLOWS: dict[str, WorkflowDefinition] = {
             WorkflowStep("http_probe"),
         ),
     ),
+    "network": WorkflowDefinition(
+        name="network",
+        description="Network-focused authorized scanning: ports, SMB enumeration.",
+        steps=(
+            WorkflowStep("port_scan", {"top_ports": 1000}),
+            WorkflowStep("smb_enum"),
+            WorkflowStep("smb_map"),
+        ),
+    ),
+    "web": WorkflowDefinition(
+        name="web",
+        description="Web application authorized assessment: fingerprint, probe, TLS, vulns.",
+        steps=(
+            WorkflowStep("web_fingerprint"),
+            WorkflowStep("http_probe"),
+            WorkflowStep("tls_scan"),
+            WorkflowStep("web_vuln_scan"),
+            WorkflowStep("directory_brute"),
+        ),
+    ),
+    "research": WorkflowDefinition(
+        name="research",
+        description="Research/OSINT authorized workflow: DNS + passive harvest.",
+        steps=(
+            WorkflowStep("dns_lookup"),
+            WorkflowStep("dns_enum"),
+            WorkflowStep("osint_harvest"),
+        ),
+    ),
+    "osint": WorkflowDefinition(
+        name="osint",
+        description="Passive open-source intelligence on an authorized target.",
+        steps=(
+            WorkflowStep("osint_harvest"),
+            WorkflowStep("dns_lookup"),
+        ),
+    ),
 }
 
 

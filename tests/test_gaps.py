@@ -1064,3 +1064,42 @@ class WorkflowTriggerTest(KsecTestCase):
         self.ctx.triggers.set_enabled(trigger.id, False)
         hits = self.ctx.triggers.matches("job.completed", {"target": "*"})
         self.assertEqual(hits, [])
+
+
+class TopLevelShortcutsTest(KsecTestCase):
+    """ksec recon|network|web|research|osint TARGET — top-level workflow aliases."""
+
+    def setUp(self):
+        super().setUp()
+        self.ctx = self.make_context()
+
+    def tearDown(self):
+        self.ctx.close()
+        super().tearDown()
+
+    def _shortcut(self, name):
+        from ksec.main import build_parser
+
+        parser = build_parser()
+        args = parser.parse_args(
+            [name, "10.0.0.9", "--user", "admin", "--password", "pw", "--dry-run"]
+        )
+        self.assertEqual(args.func.__name__, "cmd_workflow_run")
+        self.assertEqual(args.name, name)
+        return args
+
+    def test_all_shortcuts_parse_to_workflow_run(self):
+        for name in ("recon", "network", "web", "research", "osint"):
+            self._shortcut(name)
+
+    def test_shortcut_workflows_exist_and_are_policy_gated(self):
+        from ksec.identity.users import UserRepository
+
+        user = UserRepository(self.ctx.db).get_by_username("admin")
+        for name in ("recon", "network", "web", "research", "osint"):
+            definition = self.ctx.workflow_store.resolve(name)
+            self.assertIsNotNone(definition, name)
+            self.assertTrue(definition.steps)
+            # Every step must be a capability the platform knows how to run.
+            for step in definition.steps:
+                self.assertIsNotNone(self.ctx.adapters.get(step.capability), step.capability)

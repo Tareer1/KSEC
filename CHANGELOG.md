@@ -7,6 +7,13 @@ All notable changes are tracked here. Format follows
 
 ### Added — all-in-one completeness (spec 03/07/08)
 
+- **Top-level workflow shortcuts**: `ksec recon|network|web|research|osint
+  TARGET` — direct aliases for the built-in workflows of the same name
+  (same policy-gated engine and flags as `ksec run`/`ksec assess`):
+  recon (dns+ports), network (ports+smb), web (fingerprint+probe+tls+
+  vulns+directories), research (dns+dnsrecon+osint) and osint
+  (harvest+dns).
+
 - **5 domain modules** (`ksec module`): API Security, Wireless, Cloud,
   Container and Kubernetes (spec 08 #23-27). Each declares its Kali
   capabilities + tooling, reports what is installed (`module list|info`)

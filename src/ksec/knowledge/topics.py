@@ -1313,6 +1313,25 @@ TOPICS: tuple[Topic, ...] = (
         ),
     ),
     Topic(
+        id="top-level-shortcuts",
+        title="Top-level shortcuts: recon / network / web / research / osint",
+        kind="workflow",
+        audience=("all",),
+        summary=(
+            "ksec recon|network|web|research|osint TARGET are top-level shortcuts for "
+            "the built-in workflows of the same name — the same policy-gated run as "
+            "ksec run, without typing --workflow."
+        ),
+        keywords=("shortcut", "recon", "network", "web", "research", "osint", "alias", "quick"),
+        sections=(
+            ("p", "Each shortcut maps to a built-in workflow: recon (dns+ports), network (ports+smb), web (fingerprint+probe+tls+vulns+dirs), research (dns+dnsrecon+osint), osint (harvest+dns). Same flags as ksec run."),
+            ("cmd", "ksec recon example.com --engagement 1 --user admin --password ..."),
+            ("cmd", "ksec web example.com --engagement 1 --user admin --password ... --dry-run"),
+            ("cmd", "ksec osint example.com --engagement 1 --user admin --password ..."),
+            ("tip", "Use --dry-run first to preview the policy plan without executing."),
+        ),
+    ),
+    Topic(
         id="ask-how",
         title="Using ksec ask — the in-tool mentor",
         kind="workflow",

@@ -1227,6 +1227,25 @@ python3 -m ksec case reopen 1 --reason "new evidence"
 python3 -m ksec evidence custody 1
 ```
 
+## 28.10b Top-level shortcuts: recon / network / web / research / osint
+
+```bash
+python3 -m ksec recon example.com --engagement 1 --user admin --password ...
+python3 -m ksec network example.com --engagement 1 --user admin --password ...
+python3 -m ksec web example.com --engagement 1 --user admin --password ...
+python3 -m ksec research example.com --engagement 1 --user admin --password ...
+python3 -m ksec osint example.com --engagement 1 --user admin --password ...
+```
+
+Shortcuts for the built-in workflows of the same name (same flags as
+`ksec run`/`ksec assess` — `--dry-run`, `--workspace`, `--role`):
+
+- `recon` → dns_lookup + port_scan
+- `network` → port_scan + smb_enum + smb_map
+- `web` → web_fingerprint + http_probe + tls_scan + web_vuln_scan + directory_brute
+- `research` → dns_lookup + dns_enum + osint_harvest
+- `osint` → osint_harvest + dns_lookup
+
 ## 28.11 Domain modules: api / wireless / cloud / container / kubernetes (spec 08 #23-27)
 
 ```bash

@@ -533,6 +533,19 @@ run_grep "suggest blue suggests a detection rule" 'Add a detection rule' "${BIN[
 run_grep "role red trailer has NEXT" 'NEXT — ab kya karna hai' "${BIN[@]}" role red
 expect_fail "suggest unknown role" "${BIN[@]}" suggest hacker
 
+say "36b. top-level shortcuts: recon/network/web/research/osint"
+for sc in recon network web research osint; do
+  run_grep "shortcut $sc dry-run" "\"workflow\": \"$sc\"" "${BIN[@]}" "$sc" example.com --engagement 1 --user "$ADMIN" --password "$APW" --dry-run
+  run_ok "help: $sc" "${BIN[@]}" "$sc" --help
+done
+BLOCK_OUT=$("${BIN[@]}" recon 203.0.113.77 --engagement 1 --user "$ADMIN" --password "$APW" --dry-run 2>&1)
+if [ $? -ne 0 ] && echo "$BLOCK_OUT" | grep -q '"blocked": true'; then
+  PASS=$((PASS + 1)); echo "PASS  shortcut blocked out-of-scope (rc!=0, blocked=true)"
+else
+  FAIL=$((FAIL + 1)); FAILED+=("shortcut blocked"); echo "FAIL  shortcut blocked out-of-scope"
+  printf '%s\n' "$BLOCK_OUT" | head -4 | sed 's/^/      /'
+fi
+
 say "37. domain modules + purple + change detection"
 run_ok "module list"       "${BIN[@]}" module list
 run_ok "module info api"   "${BIN[@]}" module info api

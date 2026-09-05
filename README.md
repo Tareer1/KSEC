@@ -113,14 +113,18 @@ Implemented so far (spec Stages 1–9 core, interfaces included):
 - [x] **Learn practice drills** (`ksec learn practice`): hands-on authorized drills with per-user attempts + pass status (`practice list|start|pass`), migration `015`
 - [x] **Event-driven workflow triggers** (`ksec workflow trigger`): event_type + target-glob → workflow bindings fired through the normal policy gate (`trigger add|list|remove|enable|disable|fire`), beyond cron schedules, migration `015`
 - [x] **Real-world red team — exploit intelligence** (`ksec exploit`): local Exploit-DB lookup maps discovered software versions to known public exploits (`exploit search` / `exploit map` — auto-findings for verified exploits with CVE + EDB-ID). New scope-gated offensive capabilities: `cve_scan` (nuclei — 7000+ CVE templates), `sqli_test` (sqlmap), `web_fuzz` (ffuf), `smb_cred_test` (nxc) and the `exploit_lookup` workflow
+- [x] **Alternate-tool dispatch** (`--options '{"tool": "..."}'`): the same capability can use a different provider — `port_scan` via `masscan` (high-speed), `web_fuzz` via `wfuzz`, `dns_enum` via `dnsenum`, `subdomain_enum` via `amass` (deep OSINT). New workflows: `fast_scan` (masscan range scan), `subdomain` (deep subdomain discovery), `wifi` (AP discovery)
+- [x] **Wireless capabilities**: `wifi_scan` (iwlist — AP discovery: BSSID/ESSID/channel/encryption) and `wifi_crack` (aircrack-ng — WPA/WEP key recovery from captured handshakes), both scope-gated like every capability
+- [x] **DOCX report export**: `report create --format docx` and `report export <id> --format docx` write a real editable Word document — pure stdlib (zipfile/XML), zero dependencies
+- [x] **Extended ATT&CK coverage**: adversary/atomic exercises now map 21 techniques across all 14 kill-chain phases (adds T1505.003, T1078, T1003, T1213, T1041, T1485)
 - [x] CLI: `init status doctor version config env tools session engagement
       assess job asset finding evidence case report learn workflow dfir intel
       plugin adversary vuln atomic soc siem run backup tui dashboard ask role api
       stop db export grc malware endpoint mode module purple change history graph`
-- [x] 492 unit tests (stdlib unittest, no dependencies) + 356-check CLI smoke suite
+- [x] 504 unit tests (stdlib unittest, no dependencies) + 370-check CLI smoke suite
   (`python3 -m unittest discover -s tests` / `bash scripts/smoke.sh`)
 - [x] Migrations `001`–`015`
-- [x] **v0.4.0** — changelog in `CHANGELOG.md`; docs in [`docs/`](docs/README.md)
+- [x] **v0.5.0** — changelog in `CHANGELOG.md`; docs in [`docs/`](docs/README.md)
 
 ## Requirements
 

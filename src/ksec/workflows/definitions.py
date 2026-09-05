@@ -113,6 +113,29 @@ WORKFLOWS: dict[str, WorkflowDefinition] = {
             WorkflowStep("exploit_search", {"retry": 1, "retry_delay": 0.5}),
         ),
     ),
+    "subdomain": WorkflowDefinition(
+        name="subdomain",
+        description="Subdomain discovery: deep enumeration of an authorized domain.",
+        steps=(
+            WorkflowStep("dns_lookup"),
+            WorkflowStep("subdomain_enum"),
+            WorkflowStep("dns_enum"),
+        ),
+    ),
+    "wifi": WorkflowDefinition(
+        name="wifi",
+        description="Wireless authorized assessment: AP discovery.",
+        steps=(
+            WorkflowStep("wifi_scan", {"interface": "wlan0"}),
+        ),
+    ),
+    "fast_scan": WorkflowDefinition(
+        name="fast_scan",
+        description="High-speed port scan of a large authorized range (masscan).",
+        steps=(
+            WorkflowStep("port_scan", {"tool": "masscan", "rate": 1000, "ports": "1-1024"}),
+        ),
+    ),
 }
 
 

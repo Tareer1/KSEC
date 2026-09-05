@@ -16,8 +16,12 @@ def cmd_report_create(ctx: KsecContext, args) -> int:
     )
     if args.out:
         path = Path(args.out)
-        if args.format == "pdf":
-            path.write_bytes(ctx.reports.to_pdf(report))
+        if args.format in ("pdf", "docx"):
+            path.write_bytes(
+                ctx.reports.to_pdf(report)
+                if args.format == "pdf"
+                else ctx.reports.to_docx(report)
+            )
         else:
             path.write_text(report.content, encoding="utf-8")
         emit(
@@ -70,18 +74,23 @@ def cmd_report_preview(ctx: KsecContext, args) -> int:
 
 
 def cmd_report_export(ctx: KsecContext, args) -> int:
-    """Export a stored report as PDF bytes to a file (spec: PDF export)."""
+    """Export a stored report to a file (pdf or docx bytes, else text)."""
     report = ctx.reports.get(args.id)
     if report is None:
         emit(f"unknown report: {args.id}", args.json, args.quiet)
         return 1
-    path = Path(args.out or f"report-{args.id}.pdf")
-    path.write_bytes(ctx.reports.to_pdf(report))
+    fmt = getattr(args, "format", None) or "pdf"
+    if fmt not in ("pdf", "docx"):
+        emit(f"export format must be pdf or docx, got {fmt}", args.json, args.quiet)
+        return 1
+    path = Path(args.out or f"report-{args.id}.{fmt}")
+    data = ctx.reports.to_pdf(report) if fmt == "pdf" else ctx.reports.to_docx(report)
+    path.write_bytes(data)
     emit(
         {
             "exported": True,
             "id": report.id,
-            "format": "pdf",
+            "format": fmt,
             "path": str(path),
             "bytes": path.stat().st_size,
         },

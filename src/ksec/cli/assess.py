@@ -25,7 +25,9 @@ def _step_explanations(ctx: KsecContext, definition, target: str, mode):
         explanation = ctx.explain.explain_capability(step.capability, mode)
         if mode.is_expert():
             # Expert mode additionally shows the exact command that would run.
-            adapter = ctx.adapters.get(step.capability)
+            adapter = ctx.adapters.get(
+                step.capability, tool=step.options.get("tool") if step.options else None
+            )
             command = None
             if adapter is not None:
                 from ksec.adapters.base import CommandRequest

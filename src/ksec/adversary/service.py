@@ -70,15 +70,21 @@ TACTIC_MAP = {
     "T1059": "execution",
     "T1053": "persistence",
     "T1547": "persistence",
+    "T1505.003": "persistence",
+    "T1078": "defense-evasion",
     "T1046": "discovery",
     "T1082": "discovery",
     "T1110": "credential-access",
+    "T1003": "credential-access",
     "T1071": "command-and-control",
     "T1071.001": "command-and-control",
     "T1005": "collection",
+    "T1213": "collection",
     "T1021": "lateral-movement",
     "T1567": "exfiltration",
+    "T1041": "exfiltration",
     "T1055": "defense-evasion",
+    "T1485": "impact",
 }
 
 # ATT&CK tactic chain (kill-chain order). Steps are executed in this order

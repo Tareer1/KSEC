@@ -1365,6 +1365,45 @@ TOPICS: tuple[Topic, ...] = (
         ),
     ),
     Topic(
+        id="wireless-attack",
+        title="Wireless testing: wifi_scan + wifi_crack",
+        kind="module",
+        audience=("red", "purple", "all"),
+        summary=(
+            "Wireless capabilities: wifi_scan (iwlist — AP discovery: BSSID, ESSID, "
+            "channel, encryption) and wifi_crack (aircrack-ng — WPA/WEP key recovery "
+            "from captured handshakes). Scope-gated like every capability — target the "
+            "interface or capture file only under an authorized engagement."
+        ),
+        keywords=("wifi", "wireless", "wlan", "ap", "access point", "bssid", "essid", "aircrack", "iwlist", "handshake", "wpa", "wep", "wifi scan", "wifi crack"),
+        sections=(
+            ("p", "ksec run wifi_scan wlan0 discovers nearby access points and parses each cell into BSSID/ESSID/channel/encryption entities. ksec run wifi_crack <capture.cap> recovers a WPA/WEP key with a wordlist. Use the wifi workflow for a one-step AP scan."),
+            ("cmd", "ksec run wifi_scan wlan0 --engagement 1 --user red --options '{\"interface\": \"wlan0\"}'"),
+            ("cmd", "ksec run wifi_crack /labs/handshake.cap --engagement 1 --user red --options '{\"wordlist\": \"/usr/share/wordlists/rockyou.txt\"}'"),
+            ("cmd", "ksec run wifi example.com --engagement 1 --user red --dry-run"),
+            ("tip", "Wireless attacks need a monitor-mode capable adapter and root for injection. KSEC keeps the scope gate first: capture files and interfaces are targets like any other, so they must sit inside an authorized engagement."),
+        ),
+    ),
+    Topic(
+        id="alternate-tools",
+        title="Alternate-tool dispatch: masscan / wfuzz / dnsenum / amass",
+        kind="module",
+        audience=("red", "blue", "all"),
+        summary=(
+            "One capability, many tools: --options '{\"tool\": \"masscan\"}' picks the "
+            "provider for a run. port_scan -> masscan (high-speed), web_fuzz -> wfuzz, "
+            "dns_enum -> dnsenum, subdomain_enum -> amass (deep passive OSINT)."
+        ),
+        keywords=("masscan", "amass", "wfuzz", "dnsenum", "alternate", "fast scan", "high-speed", "deep subdomain", "tool selection"),
+        sections=(
+            ("p", "Every capability has a preferred tool (nmap, ffuf, dnsrecon). Passing options.tool selects an alternate provider while the policy gate stays identical. Built-in workflows that use alternates: fast_scan (masscan), subdomain (amass+dnsenum), wifi."),
+            ("cmd", "ksec run port_scan 10.0.0.0/24 --engagement 1 --user red --options '{\"tool\": \"masscan\", \"ports\": \"1-1024\", \"rate\": 1000}'"),
+            ("cmd", "ksec run subdomain_enum example.com --engagement 1 --user red --options '{\"tool\": \"amass\"}'"),
+            ("cmd", "ksec run fast_scan example.com --engagement 1 --user red --dry-run"),
+            ("tip", "Use ksec assess --workflow fast_scan --mode expert --explain --dry-run to preview the exact alternate command before it runs."),
+        ),
+    ),
+    Topic(
         id="ask-how",
         title="Using ksec ask — the in-tool mentor",
         kind="workflow",
@@ -1416,6 +1455,14 @@ ALIASES: dict[str, str] = {
     "webhook": "workflow-triggers",
     "exploit": "exploit-intelligence",
     "exploit-db": "exploit-intelligence",
+    "wifi": "wireless-attack",
+    "wireless": "wireless-attack",
+    "wlan": "wireless-attack",
+    "aircrack": "wireless-attack",
+    "masscan": "alternate-tools",
+    "amass": "alternate-tools",
+    "wfuzz": "alternate-tools",
+    "dnsenum": "alternate-tools",
     "searchsploit": "exploit-intelligence",
     "cve": "exploit-intelligence",
     "sql injection": "exploit-intelligence",

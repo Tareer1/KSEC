@@ -17,7 +17,7 @@ from ksec.evidence.service import EvidenceService
 from ksec.findings.service import FindingService
 from ksec.identity.users import now_utc
 
-VALID_FORMATS = ("markdown", "html", "pdf")
+VALID_FORMATS = ("markdown", "html", "pdf", "docx")
 
 
 @dataclass(frozen=True)
@@ -70,15 +70,12 @@ class ReportService:
         cases = self.cases.list()
         rules = self.authz.list_authorizations(engagement_id) if engagement_id else []
 
-        if fmt == "markdown":
-            content = self._render_markdown(
-                report_title, engagement, rules, assets, findings, evidence, cases
-            )
-        elif fmt == "html":
+        if fmt == "html":
             content = self._render_html(
                 report_title, engagement, rules, assets, findings, evidence, cases
             )
         else:
+            # markdown, pdf and docx all generate from structured markdown.
             content = self._render_markdown(
                 report_title, engagement, rules, assets, findings, evidence, cases
             )
@@ -136,6 +133,13 @@ class ReportService:
         from ksec.reporting.pdf import render_pdf
 
         return render_pdf(report.content, report.title)
+
+    @staticmethod
+    def to_docx(report: Report) -> bytes:
+        """Export a report's stored markdown content as an editable .docx."""
+        from ksec.reporting.docx import render_docx
+
+        return render_docx(report.content, report.title)
 
     def get(self, report_id: int) -> Report | None:
         row = self.db.query_one("SELECT * FROM reports WHERE id = ?", (report_id,))

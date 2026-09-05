@@ -401,7 +401,10 @@ class Scheduler:
             return
         self.jobs.set_state(job_id, "RUNNING", started_at=now_utc())
 
-        adapter = self.adapters.get(job.capability)
+        # ``options.tool`` selects an alternate provider for the capability
+        # (e.g. masscan instead of nmap for port_scan).
+        selected_tool = (job.options or {}).get("tool") if job.options else None
+        adapter = self.adapters.get(job.capability, tool=selected_tool)
         if adapter is None:
             self.jobs.fail(job_id, f"No adapter for capability {job.capability}")
             return

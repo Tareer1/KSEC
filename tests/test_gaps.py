@@ -987,7 +987,7 @@ class ReportPreviewExportTest(KsecTestCase):
 
     def test_invalid_format_rejected(self):
         with self.assertRaises(ValueError):
-            self.ctx.reports.generate(None, fmt="docx")
+            self.ctx.reports.generate(None, fmt="odt")
 
 
 class PracticeDrillsTest(KsecTestCase):
@@ -1322,3 +1322,207 @@ class NucleiCveScanTest(KsecTestCase):
         definition = self.ctx.workflow_store.resolve("web")
         caps = [s.capability for s in definition.steps]
         self.assertIn("cve_scan", caps)
+
+
+class AlternateToolAdaptersTest(KsecTestCase):
+    """masscan/amass/wfuzz/dnsenum/iwlist/aircrack-ng adapters + parsers."""
+
+    def setUp(self):
+        super().setUp()
+        self.ctx = self.make_context()
+
+    def tearDown(self):
+        self.ctx.close()
+        super().tearDown()
+
+    def test_adapter_registry_tool_selection(self):
+        reg = self.ctx.adapters
+        # preferred providers unchanged
+        self.assertEqual(reg.get("port_scan").name, "nmap")
+        self.assertEqual(reg.get("web_fuzz").name, "ffuf")
+        self.assertEqual(reg.get("dns_enum").name, "dnsrecon")
+        # tool selection works
+        self.assertEqual(reg.get("port_scan", tool="masscan").name, "masscan")
+        self.assertEqual(reg.get("web_fuzz", tool="wfuzz").name, "wfuzz")
+        self.assertEqual(reg.get("dns_enum", tool="dnsenum").name, "dnsenum")
+        self.assertEqual(reg.get("subdomain_enum", tool="amass").name, "amass")
+        self.assertEqual(reg.get("wifi_scan", tool="iwlist").name, "iwlist")
+        self.assertEqual(reg.get("wifi_crack", tool="aircrack-ng").name, "aircrack-ng")
+        # wrong tool for capability falls back to preferred
+        self.assertEqual(reg.get("port_scan", tool="ffuf").name, "nmap")
+
+    def test_masscan_build_and_parse(self):
+        from ksec.adapters.base import CommandRequest
+
+        adapter = self.ctx.adapters.get("port_scan", tool="masscan")
+        cmd = adapter.build_command(
+            CommandRequest("port_scan", "10.0.0.0/24", {"ports": "1-1024", "rate": 1000})
+        )
+        self.assertEqual(cmd[0], "masscan")
+        self.assertIn("-p", cmd)
+        self.assertIn("--rate", cmd)
+        parsed = adapter.parse_output(
+            '[{"ip": "10.0.0.5", "ports": [{"port": 80, "proto": "tcp", "status": "open"}]}]'
+        )
+        self.assertEqual(len(parsed.entities), 1)
+        self.assertEqual(parsed.entities[0]["addresses"], ["10.0.0.5"])
+        self.assertEqual(parsed.entities[0]["ports"][0]["port"], "80")
+
+    def test_amass_build_and_parse(self):
+        from ksec.adapters.base import CommandRequest
+
+        adapter = self.ctx.adapters.get("subdomain_enum", tool="amass")
+        cmd = adapter.build_command(CommandRequest("subdomain_enum", "example.com"))
+        self.assertEqual(cmd[0], "amass")
+        self.assertIn("-passive", cmd)
+        parsed = adapter.parse_output(
+            "[DNS] Querying example.com\nmail.example.com\nwww.example.com (FQDN)\napi.example.com.\n"
+        )
+        names = sorted(e["name"] for e in parsed.entities)
+        self.assertEqual(names, ["api.example.com", "mail.example.com", "www.example.com"])
+
+    def test_wfuzz_build_and_parse(self):
+        from ksec.adapters.base import CommandRequest
+
+        adapter = self.ctx.adapters.get("web_fuzz", tool="wfuzz")
+        cmd = adapter.build_command(CommandRequest("web_fuzz", "http://example.com"))
+        self.assertEqual(cmd[0], "wfuzz")
+        self.assertIn("FUZZ", " ".join(cmd))
+        parsed = adapter.parse_output(
+            '000000001:   200        12 L      34 W      123 Ch   "admin"\n'
+            '000000002:   301        9 L      28 W      194 Ch   "images"\n'
+        )
+        self.assertEqual(len(parsed.entities), 2)
+        self.assertEqual(parsed.entities[0]["status"], 200)
+
+    def test_dnsenum_build_and_parse(self):
+        from ksec.adapters.base import CommandRequest
+
+        adapter = self.ctx.adapters.get("dns_enum", tool="dnsenum")
+        cmd = adapter.build_command(CommandRequest("dns_enum", "example.com"))
+        self.assertEqual(cmd[0], "dnsenum")
+        parsed = adapter.parse_output(
+            "example.com.  300 IN A 93.184.216.34\n"
+            "ns1.example.com.  300 IN A 93.184.216.35\n"
+        )
+        self.assertEqual(len(parsed.entities), 2)
+        self.assertEqual(parsed.entities[0]["record_type"], "A")
+
+    def test_iwlist_build_and_parse(self):
+        from ksec.adapters.base import CommandRequest
+
+        adapter = self.ctx.adapters.get("wifi_scan", tool="iwlist")
+        cmd = adapter.build_command(CommandRequest("wifi_scan", "wlan0", {"interface": "wlan0"}))
+        self.assertEqual(cmd, ["iwlist", "wlan0", "scan"])
+        parsed = adapter.parse_output(
+            "Cell 01 - Address: 00:11:22:33:44:55\n"
+            "                    Channel:6\n"
+            "                    Encryption key:on\n"
+            '                    ESSID:"MyNetwork"\n'
+            "Cell 02 - Address: AA:BB:CC:DD:EE:FF\n"
+            "                    Encryption key:off\n"
+            '                    ESSID:"OpenNet"\n'
+        )
+        self.assertEqual(len(parsed.entities), 2)
+        self.assertEqual(parsed.entities[0]["essid"], "MyNetwork")
+        self.assertEqual(parsed.entities[1]["encryption"], "off")
+
+    def test_aircrack_build_and_parse(self):
+        from ksec.adapters.base import CommandRequest
+
+        adapter = self.ctx.adapters.get("wifi_crack", tool="aircrack-ng")
+        cmd = adapter.build_command(
+            CommandRequest("wifi_crack", "/tmp/hs.cap", {"wordlist": "/usr/share/wordlists/rockyou.txt"})
+        )
+        self.assertEqual(cmd[0], "aircrack-ng")
+        self.assertIn("-w", cmd)
+        parsed = adapter.parse_output("                    KEY FOUND! [ mypassword ]\n")
+        self.assertEqual(parsed.entities[0]["key"], "mypassword")
+        self.assertEqual(parsed.entities[0]["status"], "recovered")
+
+    def test_workflows_include_new_builtins(self):
+        from ksec.workflows.definitions import get_workflow
+
+        for name in ("subdomain", "wifi", "fast_scan"):
+            wf = get_workflow(name)
+            self.assertIsNotNone(wf, name)
+        self.assertEqual(
+            get_workflow("fast_scan").steps[0].options.get("tool"), "masscan"
+        )
+        self.assertEqual(get_workflow("wifi").steps[0].capability, "wifi_scan")
+
+
+class DocxReportExportTest(KsecTestCase):
+    """DOCX report export (zero-dependency writer)."""
+
+    def setUp(self):
+        super().setUp()
+        self.ctx = self.make_context()
+
+    def tearDown(self):
+        self.ctx.close()
+        super().tearDown()
+
+    def _run_cli(self, args: list[str]) -> tuple[int, str]:
+        """Run the ksec CLI in-process with the isolated env."""
+        import io
+        import sys
+        from contextlib import redirect_stdout
+        from ksec.main import main
+
+        buf = io.StringIO()
+        with redirect_stdout(buf):
+            try:
+                rc = main(args)
+            except SystemExit as exc:
+                rc = exc.code or 0
+        return int(rc), buf.getvalue()
+
+    def test_docx_generation_valid_zip(self):
+        import io
+        import zipfile
+
+        report = self.ctx.reports.generate(None, title="Docx Test", fmt="docx")
+        self.assertEqual(report.format, "docx")
+        data = self.ctx.reports.to_docx(report)
+        self.assertGreater(len(data), 500)
+        archive = zipfile.ZipFile(io.BytesIO(data))
+        names = archive.namelist()
+        self.assertIn("word/document.xml", names)
+        doc = archive.read("word/document.xml").decode()
+        self.assertIn("<w:document", doc)
+        self.assertIn("Docx Test", doc)
+
+    def test_docx_cli_create_with_out(self):
+        from pathlib import Path
+
+        out = Path(self.tmp_dir) / "report.docx"
+        rc, _ = self._run_cli(
+            ["report", "create", "--title", "Docx CLI", "--format", "docx",
+             "--out", str(out), "--user", "admin"]
+        )
+        self.assertEqual(rc, 0)
+        self.assertTrue(out.exists())
+        self.assertGreater(out.stat().st_size, 500)
+
+    def test_docx_export_command(self):
+        from pathlib import Path
+
+        report = self.ctx.reports.generate(None, title="Export Me", fmt="docx")
+        out = Path(self.tmp_dir) / "exported.docx"
+        rc, _ = self._run_cli(
+            ["report", "export", str(report.id), "--format", "docx", "--out", str(out)]
+        )
+        self.assertEqual(rc, 0)
+        self.assertTrue(out.exists())
+        self.assertGreater(out.stat().st_size, 500)
+
+    def test_catalog_has_new_tools(self):
+        from ksec.capabilities.catalog import TOOLS
+
+        names = {t.name for t in TOOLS}
+        for expected in ("amass", "wfuzz", "dnsenum", "iwlist", "aircrack-ng"):
+            self.assertIn(expected, names)
+        caps = {t.capability for t in TOOLS}
+        self.assertIn("wifi_scan", caps)
+        self.assertIn("wifi_crack", caps)

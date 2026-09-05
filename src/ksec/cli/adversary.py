@@ -21,6 +21,11 @@ TECHNIQUE_CAPABILITY = {
     "T1071": "http_probe",     # Application Layer Protocol
     "T1071.001": "http_probe",
     "T1190": "http_probe",     # Exploit Public-Facing Application
+    "T1505.003": "web_vuln_scan",  # Web Shell (placeholder check)
+    "T1078": "auth_test",       # Valid Accounts (credential validation)
+    "T1110": "auth_test",       # Brute Force (online login testing)
+    "T1041": "osint_harvest",   # Exfiltration Over C2 (placeholder)
+    "T1485": "directory_brute", # Data Destruction (placeholder probe)
 }
 
 

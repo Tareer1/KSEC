@@ -619,6 +619,26 @@ run_ok "workflow trigger enable" "${BIN[@]}" workflow trigger enable 1
 run_ok "workflow trigger remove" "${BIN[@]}" workflow trigger remove 1
 run_grep "workflow trigger fire unmatched event is a no-op" '"matched": 0' "${BIN[@]}" workflow trigger fire --event-type no.such.event --user "$ADMIN" --password "$APW"
 
+say "39. alternate-tool adapters (masscan/amass/wfuzz/dnsenum) + wireless + docx"
+run_grep "tools capabilities shows subdomain_enum" 'subdomain_enum' "${BIN[@]}" tools capabilities
+run_grep "tools capabilities shows wifi_scan" 'wifi_scan' "${BIN[@]}" tools capabilities
+run_grep "tools capabilities shows wifi_crack" 'wifi_crack' "${BIN[@]}" tools capabilities
+run_ok "subdomain workflow dry-run" "${BIN[@]}" run subdomain example.com --engagement 1 --user "$ADMIN" --password "$APW" --dry-run
+run_ok "wifi workflow dry-run" "${BIN[@]}" run wifi example.com --engagement 1 --user "$ADMIN" --password "$APW" --dry-run
+run_ok "fast_scan workflow dry-run (masscan)" "${BIN[@]}" run fast_scan example.com --engagement 1 --user "$ADMIN" --password "$APW" --dry-run
+run_grep "fast_scan expert explain shows masscan" 'masscan' "${BIN[@]}" assess example.com --workflow fast_scan --engagement 1 --user "$ADMIN" --password "$APW" --dry-run --mode expert --explain --json
+run_ok "amass dry-run" "${BIN[@]}" run subdomain_enum example.com --engagement 1 --user "$ADMIN" --password "$APW" --dry-run
+run_ok "wifi_scan dry-run" "${BIN[@]}" run wifi_scan example.com --engagement 1 --user "$ADMIN" --password "$APW" --dry-run
+run_ok "report create docx" "${BIN[@]}" report create --engagement 1 --title smoke-docx --format docx --out "$KSEC_HOME/smoke.docx"
+if python3 -c "import zipfile,sys; zipfile.ZipFile('$KSEC_HOME/smoke.docx')" 2>/dev/null; then
+  PASS=$((PASS + 1)); echo "PASS  docx is a valid zip"
+else
+  FAIL=$((FAIL + 1)); FAILED+=("docx valid zip"); echo "FAIL  docx is a valid zip"
+fi
+run_ok "report export docx" "${BIN[@]}" report export 1 --format docx --out "$KSEC_HOME/export.docx"
+run_ok "role blackhat mentions wifi" "${BIN[@]}" role blackhat
+run_ok "ask routes to wireless" "${BIN[@]}" ask "wireless kya hai"
+
 # ---------------------------------------------------------------------------
 echo
 echo "=========================================="

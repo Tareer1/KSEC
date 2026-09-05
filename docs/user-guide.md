@@ -1376,6 +1376,75 @@ python3 -m ksec workflow trigger disable/enable/remove <id>
 Triggers bind an event type + target glob to a workflow; firing runs every
 match through the normal policy gate — authorization is never bypassed.
 
+## 28.19 Alternate-tool dispatch (masscan / wfuzz / dnsenum / amass)
+
+Every capability has a preferred tool, but the same capability can run with a
+different provider through ``--options '{"tool": "..."}'``:
+
+```bash
+# High-speed port scan (masscan) instead of nmap
+python3 -m ksec run port_scan 10.0.0.0/24 --engagement 1 --user red \
+  --options '{"tool": "masscan", "ports": "1-1024", "rate": 1000}'
+
+# Deep subdomain enumeration (amass, passive) — subdomain_enum
+python3 -m ksec run subdomain_enum example.com --engagement 1 --user red \
+  --options '{"tool": "amass"}'
+
+# Web content fuzzing with wfuzz instead of ffuf
+python3 -m ksec run web_fuzz http://example.com --engagement 1 --user red \
+  --options '{"tool": "wfuzz"}'
+
+# DNS enumeration with dnsenum instead of dnsrecon
+python3 -m ksec run dns_enum example.com --engagement 1 --user red \
+  --options '{"tool": "dnsenum"}'
+```
+
+New built-in workflows use this: `fast_scan` (masscan range scan),
+`subdomain` (dns + amass + dnsenum) and `wifi` (AP discovery).
+
+## 28.20 Wireless capabilities (wifi_scan / wifi_crack)
+
+Wireless testing is scope-gated like every capability (target must be
+covered by an engagement scope rule).
+
+```bash
+# Discover access points on an authorized interface
+python3 -m ksec run wifi_scan wlan0 --engagement 1 --user red \
+  --options '{"interface": "wlan0"}'
+# => entities: BSSID / ESSID / channel / encryption
+
+# Recover a WPA/WEP key from a captured handshake (own lab captures only)
+python3 -m ksec run wifi_crack /labs/handshake.cap --engagement 1 --user red \
+  --options '{"wordlist": "/usr/share/wordlists/rockyou.txt"}'
+# => "KEY FOUND!" parsed into a wifi_key entity
+```
+
+## 28.21 DOCX report export
+
+```bash
+# Create a report directly as an editable Word document
+python3 -m ksec report create --engagement 1 --format docx --out report.docx
+
+# Export a stored report as DOCX
+python3 -m ksec report export 1 --format docx --out report.docx
+```
+
+The DOCX writer is pure stdlib (zipfile + OOXML) — no dependencies, fully
+offline, opens in Word / LibreOffice / Google Docs.
+
+## 28.22 Extended ATT&CK coverage
+
+Adversary and atomic exercises now cover **21 techniques** across all 14
+kill-chain phases. Newly mapped techniques include T1505.003 (web shell),
+T1078 (valid accounts), T1003 (credential dumping), T1213 (data from
+information repositories), T1041 (exfiltration over C2) and T1485 (data
+destruction).
+
+```bash
+python3 -m ksec adversary profile add --name apt-x --technique T1505.003 --technique T1041
+python3 -m ksec adversary coverage
+```
+
 ## 28. Tips and troubleshooting
 
 **"Target not authorized for ..." / REQUIRE_AUTHORIZATION**

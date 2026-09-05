@@ -3,6 +3,37 @@
 All notable changes are tracked here. Format follows
 [Keep a Changelog](https://keepachangelog.com/) and semantic versioning.
 
+## [0.5.0] - 2026-09-05 — alternate-tool dispatch, wireless + DOCX round
+
+### Added
+
+- **Alternate-tool dispatch**: the scheduler now resolves a capability to a
+  specific provider via `options.tool` (`--options '{"tool": "masscan"}'`),
+  while the first registered built-in stays the preferred provider. New
+  adapters + parsers: `masscan` (port_scan, JSONL host entities), `amass`
+  (subdomain_enum, passive deep enumeration), `wfuzz` (web_fuzz), `dnsenum`
+  (dns_enum). AdapterRegistry gained tool-selection with safe fallback to
+  the preferred provider.
+- **New built-in workflows**: `fast_scan` (masscan high-speed range scan),
+  `subdomain` (dns + amass + dnsenum chain) and `wifi` (AP discovery).
+- **Wireless capabilities**: `wifi_scan` (iwlist — BSSID/ESSID/channel/
+  encryption entities) and `wifi_crack` (aircrack-ng — WPA/WEP key recovery
+  from captured handshakes), scope-gated like every capability, with
+  catalog + permission entries.
+- **DOCX report export**: `report create --format docx` and
+  `report export <id> --format docx` write a real OOXML Word document via a
+  pure-stdlib writer (zipfile + document.xml + styles) — headings, bullets
+  and bold/code spans map to Word styles.
+- **Extended ATT&CK coverage**: TACTIC_MAP and technique→capability hints
+  now cover 21 techniques across all 14 kill-chain phases (adds T1505.003,
+  T1078, T1003, T1213, T1041, T1485).
+- Catalog grows to 28 tools / 27 capabilities; `ksec assess --explain`
+  (expert mode) now shows the resolved alternate-tool command.
+
+### Verified
+
+- 504 unit tests + 370-check CLI smoke suite + QA gate all green.
+
 ## [0.4.0] - 2026-09-05 — final gap-closing round
 
 ### Added — all-in-one completeness (spec 03/07/08)

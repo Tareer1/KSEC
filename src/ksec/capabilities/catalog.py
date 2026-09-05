@@ -43,6 +43,11 @@ TOOLS: list[ToolDefinition] = [
     ToolDefinition("sqlmap", "sqlmap", "web", "sqli_test", "SQL injection testing (authorized URLs)", "sqlmap"),
     ToolDefinition("ffuf", "ffuf", "web", "web_fuzz", "Fast web content fuzzing", "ffuf"),
     ToolDefinition("nxc", "netexec", "network", "smb_cred_test", "SMB credential/access validation", "nxc"),
+    ToolDefinition("amass", "amass", "recon", "subdomain_enum", "Deep subdomain enumeration (OSINT + active)", "amass"),
+    ToolDefinition("wfuzz", "wfuzz", "web", "web_fuzz", "Web content fuzzing", "wfuzz"),
+    ToolDefinition("dnsenum", "dnsenum", "recon", "dns_enum", "DNS record and zone enumeration", "dnsenum"),
+    ToolDefinition("iwlist", "wireless-tools", "wireless", "wifi_scan", "Wireless access-point scanning", "iwlist"),
+    ToolDefinition("aircrack-ng", "aircrack-ng", "wireless", "wifi_crack", "WPA/WEP key recovery from captured handshakes", "aircrack-ng"),
 ]
 
 # Capability -> permission required to run it (RBAC boundary).
@@ -70,6 +75,8 @@ CAPABILITY_PERMISSION: dict[str, str] = {
     "web_fuzz": "assess.run",
     "smb_cred_test": "assess.run",
     "cve_scan": "assess.run",
+    "wifi_scan": "assess.run",
+    "wifi_crack": "assess.run",
 }
 
 

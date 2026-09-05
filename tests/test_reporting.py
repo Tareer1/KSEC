@@ -40,7 +40,7 @@ class ReportingTest(KsecTestCase):
 
     def test_invalid_format_rejected(self):
         with self.assertRaises(ValueError):
-            self.ctx.reports.generate(self.engagement.id, fmt="docx")
+            self.ctx.reports.generate(self.engagement.id, fmt="odt")
 
     def test_list_and_get(self):
         first = self.ctx.reports.generate(self.engagement.id, fmt="markdown")

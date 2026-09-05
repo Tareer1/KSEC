@@ -119,6 +119,13 @@ class UserRepository:
             (status, now_utc(), user_id),
         )
 
+    def set_password(self, user_id: int, password: str) -> None:
+        """Replace a user's password (re-hashes with a fresh random salt)."""
+        self.db.execute(
+            "UPDATE users SET password_hash = ?, updated_at = ? WHERE id = ?",
+            (hash_password(password), now_utc(), user_id),
+        )
+
     def authenticate(self, username: str, password: str) -> User:
         """Authenticate a user; raises :class:`IdentityError` on failure."""
         user = self.get_by_username(username)

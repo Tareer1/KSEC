@@ -1475,6 +1475,24 @@ python3 -m ksec run smtp_enum mail.example.com --engagement 1 --user red
 python3 -m ksec run enumerate example.com --engagement 1 --user red --dry-run
 ```
 
+## 28.23 Universal password / password reset
+
+Sab users ka password kisi bhi waqt reset karo — e.g. ek hi universal password
+(jaise `12345`) sab ke liye:
+
+```bash
+# Ek user ka password reset
+python3 -m ksec admin user password red --password 12345
+python3 -m ksec admin user password blue --password 12345
+python3 -m ksec admin user password admin --password 12345
+
+# Password bina diye prompt/generate bhi ho sakta hai
+python3 -m ksec admin user password red
+```
+
+Reset ke baad purana password kaam nahi karta (naya scrypt hash ban jata hai)
+aur har reset audit log mein record hota hai (`ksec audit list`).
+
 ## 28. Tips and troubleshooting
 
 **"Target not authorized for ..." / REQUIRE_AUTHORIZATION**

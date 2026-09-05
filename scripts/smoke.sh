@@ -145,6 +145,9 @@ say "2. admin / sessions"
 run_ok "user create"     "${BIN[@]}" admin user create --username operator --password "$OPW" --role operator
 run_ok "user list"       "${BIN[@]}" admin user list
 run_ok "user list --json" "${BIN[@]}" admin user list --json
+run_ok "user password reset" "${BIN[@]}" admin user password operator --password "$OPW" --actor "$ADMIN"
+run_ok "user auth after reset" "${BIN[@]}" session open --user operator --password "$OPW" --workspace RED_TEAM
+expect_fail "user password reset unknown user" "${BIN[@]}" admin user password ghost --password x
 expect_fail "audit list as operator (denied)" "${BIN[@]}" audit list --user operator --password "$OPW"
 run_ok "audit list as admin"   "${BIN[@]}" audit list --user "$ADMIN" --password "$APW"
 run_ok "audit list --json"     "${BIN[@]}" audit list --user "$ADMIN" --password "$APW" --json

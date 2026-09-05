@@ -7,7 +7,7 @@ import sys
 
 from ksec.bootstrap import KsecContext
 from ksec.cli.output import emit
-from ksec.core.errors import AuthorizationError
+from ksec.core.errors import AuthorizationError, IdentityError
 from ksec.identity.users import UserRepository
 
 
@@ -88,6 +88,40 @@ def cmd_user_roles(ctx: KsecContext, args) -> int:
         return 1
     roles = [r["name"] for r in ctx.rbac.user_roles(user.id)]
     emit({"username": user.username, "roles": roles}, args.json, args.quiet)
+    return 0
+
+
+def cmd_user_password(ctx: KsecContext, args) -> int:
+    """Reset a user's password (admin only) — e.g. one universal password."""
+    try:
+        user = _resolve_user(ctx, args.username)
+        users = UserRepository(ctx.db)
+        new_password = args.password
+        generated = False
+        if new_password is None:
+            if sys.stdin.isatty():
+                new_password = getpass.getpass(f"New password for {user.username}: ")
+            else:
+                new_password = secrets.token_urlsafe(18)
+                generated = True
+        users.set_password(user.id, new_password)
+        ctx.audit.record(
+            event_type="admin.user.password_reset",
+            actor=args.actor or args.username,
+            action="admin.user.password_reset",
+            target=f"user:{user.username}",
+            outcome="success",
+        )
+    except (AuthorizationError, IdentityError) as exc:
+        emit(str(exc), args.json, args.quiet)
+        return 1
+    if generated:
+        print(f"generated password: {new_password}", file=sys.stderr)
+    emit(
+        {"updated": True, "username": user.username, "password_reset": True},
+        args.json,
+        args.quiet,
+    )
     return 0
 
 

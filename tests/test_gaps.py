@@ -1645,3 +1645,56 @@ class ServiceEnumerationAdaptersTest(KsecTestCase):
         caps = {t.capability for t in TOOLS}
         self.assertIn("snmp_enum", caps)
         self.assertIn("smtp_enum", caps)
+
+
+class UniversalPasswordResetTest(KsecTestCase):
+    """admin user password — reset any user to one universal password."""
+
+    def setUp(self):
+        super().setUp()
+        self.ctx = self.make_context()
+        from ksec.identity.users import UserRepository
+
+        repo = UserRepository(self.ctx.db)
+        self.user = repo.create("admin", "seed-pass")
+        self.ctx.rbac.assign_role(self.user.id, "admin")
+
+    def tearDown(self):
+        self.ctx.close()
+        super().tearDown()
+
+    def test_set_password_roundtrip(self):
+        from ksec.identity.users import UserRepository
+
+        repo = UserRepository(self.ctx.db)
+        repo.set_password(self.user.id, "12345")
+        user = repo.authenticate("admin", "12345")
+        self.assertEqual(user.username, "admin")
+        with self.assertRaises(Exception):
+            repo.authenticate("admin", "seed-pass")
+
+    def test_password_reset_then_old_fails(self):
+        from ksec.identity.users import UserRepository
+
+        repo = UserRepository(self.ctx.db)
+        self.assertIsNotNone(repo.authenticate("admin", "seed-pass"))
+        repo.set_password(self.user.id, "99999")
+        self.assertIsNotNone(repo.authenticate("admin", "99999"))
+        with self.assertRaises(Exception):
+            repo.authenticate("admin", "seed-pass")
+
+    def test_cli_password_command(self):
+        import io
+        import sys
+        from contextlib import redirect_stdout
+        from ksec.main import main
+
+        buf = io.StringIO()
+        with redirect_stdout(buf):
+            rc = main(["admin", "user", "password", "admin", "--password", "12345"])
+        self.assertEqual(rc, 0)
+        from ksec.identity.users import UserRepository
+
+        repo = UserRepository(self.ctx.db)
+        user = repo.authenticate("admin", "12345")
+        self.assertEqual(user.username, "admin")

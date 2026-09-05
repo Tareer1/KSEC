@@ -137,29 +137,49 @@ Implemented so far (spec Stages 1–9 core, interfaces included):
 
 ## Install on Kali Linux
 
-### Option A — quick clone & run (no install, ~10 seconds)
+### Fastest — one command (recommended)
+
+Works on Kali's externally managed Python (PEP 668) — no sudo, no manual
+venv, no rc-file editing. The installer clones KSEC into `~/KSEC`, creates
+a `.venv`, pip-installs it (zero dependencies) and symlinks the `ksec`
+command into `~/.local/bin` so it works in any new terminal:
 
 ```bash
-cd /opt
-git clone https://github.com/Tareer1/KSEC.git
-cd KSEC
-python3 -m venv .venv            # optional but tidy
-source .venv/bin/activate
+curl -fsSL https://raw.githubusercontent.com/Tareer1/KSEC/main/install.sh | bash
+```
+
+…or, from a clone:
+
+```bash
+cd KSEC && bash install.sh
+```
+
+Customize the install location with `KSEC_DIR=/opt/KSEC bash install.sh`.
+
+### Manual — quick clone & run (no install, ~10 seconds)
+
+```bash
+git clone https://github.com/Tareer1/KSEC.git ~/KSEC
+cd ~/KSEC
 export PYTHONPATH=src            # point Python at the source
 python3 -m ksec --version
 ```
 
-### Option B — install the `ksec` command system-wide
+### Manual — install the `ksec` command (venv, PEP 668-safe)
 
 ```bash
-cd /opt/KSEC
-export PYTHONPATH=src
+cd ~/KSEC
+python3 -m venv .venv
+source .venv/bin/activate       # every new terminal needs this line
 pip install -e .
-which ksec                       # -> /usr/local/bin/ksec (or your venv/bin)
 ksec version
 ```
 
-After either option, run the one-time initialization:
+> **Tip:** if you don't want to activate the venv every time, add
+> `alias ksec='/home/<user>/KSEC/.venv/bin/ksec'` to your shell rc —
+> `~/.zshrc` on Kali (the default shell is zsh, not bash).
+
+After any option, run the one-time initialization:
 
 ```bash
 ksec init --username admin --password 'change-me'   # creates config, DB, roles, admin

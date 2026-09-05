@@ -15,25 +15,49 @@ required to run it.
 
 ## 2. Install
 
-### 2.1 From a checkout (recommended)
+### 2.1 One command (recommended)
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/Tareer1/KSEC/main/install.sh | bash
+```
+
+…or from a clone: `bash install.sh`. The installer:
+
+1. Clones KSEC into `~/KSEC` if you are not already inside a checkout
+   (override with `KSEC_DIR`).
+2. Creates a `.venv` — required on Kali, whose system Python is externally
+   managed (PEP 668) and refuses system-wide `pip install`.
+3. Runs `.venv/bin/pip install -e .` (zero dependencies).
+4. Symlinks `ksec` into `~/.local/bin` and ensures that directory is on
+   `PATH` (writes the export to `~/.zshrc`, `~/.bashrc` or `~/.profile`),
+   so the command works in any **new** terminal without activation.
+
+No sudo. Safe to re-run (upgrades in place).
+
+### 2.2 From a checkout (manual)
 
 ```bash
 git clone <repository-url> ksec
 cd ksec
-make install        # pip install -e .  (optional; not required to run)
+python3 -m venv .venv
+source .venv/bin/activate    # every new terminal needs this line
+pip install -e .             # optional; not required to run
+ksec version
 ```
 
-### 2.2 Run without installing
+### 2.3 Run without installing
 
 ```bash
 cd ksec
 PYTHONPATH=src python3 -m ksec --help
 ```
 
-Add a shell alias for convenience:
+Add a shell alias for convenience — Kali's default shell is **zsh**, so
+prefer `~/.zshrc` over `~/.bashrc`:
 
 ```bash
-echo 'alias ksec="PYTHONPATH=/path/to/ksec/src python3 -m ksec"' >> ~/.bashrc
+echo 'alias ksec="/path/to/ksec/.venv/bin/ksec"' >> ~/.zshrc   # bash users: ~/.bashrc
+source ~/.zshrc
 ```
 
 ## 3. First run
@@ -78,8 +102,17 @@ ksec doctor      # health checks: db, migrations, tools, plugins, backup
 
 ## 5. Uninstall
 
+If you installed with `install.sh`:
+
 ```bash
-pip uninstall ksec            # if installed via pip
+rm -f ~/.local/bin/ksec       # remove the command symlink
+rm -rf ~/KSEC/.venv           # remove the virtualenv (keep or delete ~/KSEC)
+```
+
+If you installed manually with pip:
+
+```bash
+pip uninstall ksec            # inside the venv that has it
 rm -rf ~/.ksec                # local state (db, logs, config, backups)
 ```
 

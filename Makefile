@@ -16,7 +16,7 @@ init:
 	PYTHONPATH=src python3 -m ksec init
 
 install:
-	pip install -e .
+	bash install.sh   # one-command installer: venv + editable install + ksec on PATH
 
 clean:
 	find . -name '__pycache__' -type d -exec rm -rf {} +

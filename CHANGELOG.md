@@ -3,6 +3,22 @@
 All notable changes are tracked here. Format follows
 [Keep a Changelog](https://keepachangelog.com/) and semantic versioning.
 
+## [Unreleased] — one-command installer
+
+### Added
+
+- **`install.sh` — one-command install** (`curl -fsSL .../install.sh |
+  bash`, or `bash install.sh` from a clone): handles Kali's externally
+  managed Python (PEP 668) automatically by creating a `.venv`, runs the
+  editable install (zero dependencies) and symlinks the `ksec` command
+  into `~/.local/bin` with the `PATH` export written to `~/.zshrc` /
+  `~/.bashrc` / `~/.profile` — so `ksec` works in any new terminal with
+  no activation and no manual rc-file editing. Clones into `~/KSEC` when
+  run outside a checkout (`KSEC_DIR` overrides). No sudo; idempotent;
+  `make install` now delegates to it.
+- README + `docs/installation.md` rewritten around the one-command flow,
+  with the zsh-vs-bash alias trap documented (Kali's default shell is zsh).
+
 ## [0.6.0] - 2026-09-05 — full catalog runnable + service enumeration
 
 ### Added

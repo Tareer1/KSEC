@@ -131,6 +131,17 @@ def build_parser() -> argparse.ArgumentParser:
     p_ucreate.set_defaults(func=admin_commands.cmd_user_create)
     p_ulist = u_sub.add_parser("list", help="List users", parents=[common_sub])
     p_ulist.set_defaults(func=admin_commands.cmd_user_list)
+    p_uroles = u_sub.add_parser("roles", help="Show a user's roles", parents=[common_sub])
+    p_uroles.add_argument("username")
+    p_uroles.set_defaults(func=admin_commands.cmd_user_roles)
+    p_ur_add = u_sub.add_parser("role-add", help="Add a role to an existing user", parents=[common_sub])
+    p_ur_add.add_argument("username")
+    p_ur_add.add_argument("--role", required=True, choices=["admin", "operator", "auditor", "learner"])
+    p_ur_add.set_defaults(func=admin_commands.cmd_user_role_add)
+    p_ur_rm = u_sub.add_parser("role-remove", help="Remove a role from a user (last role kept)", parents=[common_sub])
+    p_ur_rm.add_argument("username")
+    p_ur_rm.add_argument("--role", required=True, choices=["admin", "operator", "auditor", "learner"])
+    p_ur_rm.set_defaults(func=admin_commands.cmd_user_role_remove)
 
     # audit
     p_audit = sub.add_parser("audit", help="Audit log (read-only, requires audit.read)", parents=[common_sub])

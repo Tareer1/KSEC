@@ -1,4 +1,4 @@
-"""Admin CLI commands: user creation and listing."""
+"""Admin CLI commands: user creation, role assignment, listing."""
 from __future__ import annotations
 
 import getpass
@@ -7,7 +7,88 @@ import sys
 
 from ksec.bootstrap import KsecContext
 from ksec.cli.output import emit
+from ksec.core.errors import AuthorizationError
 from ksec.identity.users import UserRepository
+
+
+def _resolve_user(ctx: KsecContext, username: str):
+    users = UserRepository(ctx.db)
+    user = users.get_by_username(username.strip().lower())
+    if user is None:
+        raise AuthorizationError(f"unknown user: {username}")
+    return user
+
+
+def cmd_user_role_add(ctx: KsecContext, args) -> int:
+    """Give an existing user an additional role (one person can hold several)."""
+    try:
+        user = _resolve_user(ctx, args.username)
+        if ctx.rbac.role_id(args.role) is None:
+            emit(f"unknown role: {args.role}", args.json, args.quiet)
+            return 1
+        ctx.rbac.assign_role(user.id, args.role)
+        ctx.audit.record(
+            event_type="admin.user.role_add",
+            actor=args.username,
+            action="admin.user.role_add",
+            target=f"user:{user.username}",
+            outcome="success",
+            payload={"role": args.role},
+        )
+    except AuthorizationError as exc:
+        emit(str(exc), args.json, args.quiet)
+        return 1
+    roles = [r["name"] for r in ctx.rbac.user_roles(user.id)]
+    emit(
+        {"updated": True, "username": user.username, "added": args.role, "roles": roles},
+        args.json,
+        args.quiet,
+    )
+    return 0
+
+
+def cmd_user_role_remove(ctx: KsecContext, args) -> int:
+    """Revoke one role from a user (the last role is kept)."""
+    try:
+        user = _resolve_user(ctx, args.username)
+        removed = ctx.rbac.remove_role(user.id, args.role)
+        if not removed:
+            emit(
+                f"user {user.username} does not have role {args.role}",
+                args.json,
+                args.quiet,
+            )
+            return 1
+        ctx.audit.record(
+            event_type="admin.user.role_remove",
+            actor=args.username,
+            action="admin.user.role_remove",
+            target=f"user:{user.username}",
+            outcome="success",
+            payload={"role": args.role},
+        )
+    except AuthorizationError as exc:
+        emit(str(exc), args.json, args.quiet)
+        return 1
+    roles = [r["name"] for r in ctx.rbac.user_roles(user.id)]
+    emit(
+        {"updated": True, "username": user.username, "removed": args.role, "roles": roles},
+        args.json,
+        args.quiet,
+    )
+    return 0
+
+
+def cmd_user_roles(ctx: KsecContext, args) -> int:
+    """Show every role a user holds (spec: multi-role operators)."""
+    try:
+        user = _resolve_user(ctx, args.username)
+    except AuthorizationError as exc:
+        emit(str(exc), args.json, args.quiet)
+        return 1
+    roles = [r["name"] for r in ctx.rbac.user_roles(user.id)]
+    emit({"username": user.username, "roles": roles}, args.json, args.quiet)
+    return 0
 
 
 def cmd_user_create(ctx: KsecContext, args) -> int:

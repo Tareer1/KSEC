@@ -123,6 +123,25 @@ class RbacService:
             (user_id, role["id"]),
         )
 
+    def remove_role(self, user_id: int, role_name: str) -> bool:
+        """Revoke one role from a user. Returns False when the user does not
+        have that role (the last role is never removed)."""
+        roles = self.user_roles(user_id)
+        if role_name not in {r["name"] for r in roles}:
+            return False
+        if len(roles) <= 1:
+            raise AuthorizationError(
+                f"User {user_id} has only role {role_name}; a user needs at least one role"
+            )
+        role = self.db.query_one("SELECT id FROM roles WHERE name = ?", (role_name,))
+        if role is None:
+            raise AuthorizationError(f"Unknown role: {role_name}")
+        self.db.execute(
+            "DELETE FROM user_roles WHERE user_id = ? AND role_id = ?",
+            (user_id, role["id"]),
+        )
+        return True
+
     def user_roles(self, user_id: int) -> list[sqlite3.Row]:
         return self.db.query_all(
             "SELECT r.id, r.name, r.description FROM roles r "
